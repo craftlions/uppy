@@ -4,8 +4,8 @@
  * wrapping calls in try/catch, which keeps error handling explicit and typed.
  */
 export type Result<T, E = Error> =
-  | { ok: true; data: T }
-  | { ok: false; error: E };
+	| { ok: true; data: T }
+	| { ok: false; error: E };
 
 /** Build a successful result. */
 export const ok = <T>(data: T): Result<T, never> => ({ ok: true, data });

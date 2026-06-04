@@ -9,12 +9,29 @@ import { err, ok, type Result } from "./result.ts";
  */
 export type RenovateConfig = Record<string, unknown>;
 
+/**
+ * Renovate config options this worker knows how to interpret. Other top-level
+ * keys are still returned in `config`, but are reported separately so callers
+ * can tell which options are outside this parser's current behavior.
+ */
+export const KNOWN_RENOVATE_CONFIG_OPTIONS = [
+	"$schema",
+	"extends",
+	"ignoreUnstable",
+	"osvVulnerabilityAlerts",
+	"respectLatest",
+] as const;
+
+const knownRenovateConfigOptions = new Set<string>(
+	KNOWN_RENOVATE_CONFIG_OPTIONS,
+);
+
 /** A located Renovate config: the repository path it came from and its parsed body. */
 export interface RenovateConfigResult {
-  /** The parsed configuration object. */
-  config: RenovateConfig;
-  /** The repository-relative path the config was found at. */
-  path: string;
+	/** The parsed configuration object. */
+	config: RenovateConfig;
+	/** The repository-relative path the config was found at. */
+	path: string;
 }
 
 /**
@@ -24,16 +41,16 @@ export interface RenovateConfigResult {
  * @see https://docs.renovatebot.com/configuration-options/
  */
 export const RENOVATE_CONFIG_PATHS = [
-  "renovate.json",
-  "renovate.jsonc",
-  "renovate.json5",
-  ".github/renovate.json",
-  ".github/renovate.jsonc",
-  ".github/renovate.json5",
-  ".renovaterc",
-  ".renovaterc.json",
-  ".renovaterc.jsonc",
-  ".renovaterc.json5",
+	"renovate.json",
+	"renovate.jsonc",
+	"renovate.json5",
+	".github/renovate.json",
+	".github/renovate.jsonc",
+	".github/renovate.json5",
+	".renovaterc",
+	".renovaterc.json",
+	".renovaterc.jsonc",
+	".renovaterc.json5",
 ] as const;
 
 /**
@@ -46,23 +63,35 @@ export const RENOVATE_CONFIG_PATHS = [
  * `error` arm of the {@link Result}.
  */
 export function parseRenovateConfig(
-  content: string,
-  path: string
+	content: string,
+	path: string,
 ): Result<RenovateConfig> {
-  let value: unknown;
-  try {
-    value = path.endsWith(".json5") ? parseJson5(content) : parseJsonc(content);
-  } catch (cause) {
-    const message = cause instanceof Error ? cause.message : String(cause);
-    return err(
-      new Error(`Failed to parse Renovate config ${path}: ${message}`)
-    );
-  }
+	let value: unknown;
+	try {
+		value = path.endsWith(".json5") ? parseJson5(content) : parseJsonc(content);
+	} catch (cause) {
+		const message = cause instanceof Error ? cause.message : String(cause);
+		return err(
+			new Error(`Failed to parse Renovate config ${path}: ${message}`),
+		);
+	}
 
-  if (value === null || typeof value !== "object" || Array.isArray(value)) {
-    return err(new Error(`Renovate config ${path} must be a JSON object`));
-  }
-  return ok(value as RenovateConfig);
+	if (value === null || typeof value !== "object" || Array.isArray(value)) {
+		return err(new Error(`Renovate config ${path} must be a JSON object`));
+	}
+	return ok(value as RenovateConfig);
+}
+
+/** Return top-level config option names not handled by this parser. */
+export function unknownRenovateConfigOptions(config: RenovateConfig): string[] {
+	return Object.keys(config).filter(
+		(option) => !knownRenovateConfigOptions.has(option),
+	);
+}
+
+/** Return whether OSV vulnerability alert checks are enabled in config. */
+export function osvVulnerabilityAlertsEnabled(config: RenovateConfig): boolean {
+	return config.osvVulnerabilityAlerts === true;
 }
 
 /**
@@ -78,22 +107,22 @@ export function parseRenovateConfig(
  * - `{ ok: false, error }` when a config is found but cannot be parsed.
  */
 export async function detectRenovateConfig(
-  octokit: ContentReader,
-  owner: string,
-  repo: string
+	octokit: ContentReader,
+	owner: string,
+	repo: string,
 ): Promise<Result<RenovateConfigResult | null>> {
-  for (const path of RENOVATE_CONFIG_PATHS) {
-    // Sequential by design: Renovate stops searching at the first match, so we
-    // must not read past it.
-    const content = await fetchFileContent(octokit, owner, repo, path);
-    if (content === null) {
-      continue;
-    }
-    const parsed = parseRenovateConfig(content, path);
-    if (!parsed.ok) {
-      return parsed;
-    }
-    return ok({ path, config: parsed.data });
-  }
-  return ok(null);
+	for (const path of RENOVATE_CONFIG_PATHS) {
+		// Sequential by design: Renovate stops searching at the first match, so we
+		// must not read past it.
+		const content = await fetchFileContent(octokit, owner, repo, path);
+		if (content === null) {
+			continue;
+		}
+		const parsed = parseRenovateConfig(content, path);
+		if (!parsed.ok) {
+			return parsed;
+		}
+		return ok({ path, config: parsed.data });
+	}
+	return ok(null);
 }

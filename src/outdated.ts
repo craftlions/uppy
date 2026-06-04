@@ -1,6 +1,6 @@
+import type { Dependency, OutdatedInfo } from "./deps.ts";
 import { getVersionsBatch } from "fast-npm-meta";
 import { diff, gt, parse, valid } from "semver";
-import type { Dependency, OutdatedInfo } from "./deps.ts";
 
 /**
  * Renovate's default stability knobs. See
@@ -8,27 +8,27 @@ import type { Dependency, OutdatedInfo } from "./deps.ts";
  * https://docs.renovatebot.com/configuration-options/#respectlatest.
  */
 export interface ResolveOptions {
-  /**
-   * Skip unstable (prerelease) target versions unless the current version is
-   * itself an unstable prerelease of the same `major.minor.patch`.
-   *
-   * @default true
-   */
-  ignoreUnstable?: boolean;
-  /**
-   * Don't update beyond the version tagged `latest` on the registry, unless the
-   * current version already sits ahead of `latest`.
-   *
-   * @default true
-   */
-  respectLatest?: boolean;
+	/**
+	 * Skip unstable (prerelease) target versions unless the current version is
+	 * itself an unstable prerelease of the same `major.minor.patch`.
+	 *
+	 * @default true
+	 */
+	ignoreUnstable?: boolean;
+	/**
+	 * Don't update beyond the version tagged `latest` on the registry, unless the
+	 * current version already sits ahead of `latest`.
+	 *
+	 * @default true
+	 */
+	respectLatest?: boolean;
 }
 
 /** The npm.antfu.dev endpoint caps each batch lookup; chunk requests to match. */
 const BATCH_SIZE = 50;
 
 const isUnstable = (version: { prerelease: readonly unknown[] }): boolean =>
-  version.prerelease.length > 0;
+	version.prerelease.length > 0;
 
 /**
  * Resolve the version Renovate's default policy would update `current` to,
@@ -41,60 +41,60 @@ const isUnstable = (version: { prerelease: readonly unknown[] }): boolean =>
  * `latest` dist-tag.
  */
 export function resolveUpdate(
-  current: string,
-  versions: string[],
-  latest: string,
-  options: ResolveOptions = {}
+	current: string,
+	versions: string[],
+	latest: string,
+	options: ResolveOptions = {},
 ): OutdatedInfo | null {
-  const { ignoreUnstable = true, respectLatest = true } = options;
+	const { ignoreUnstable = true, respectLatest = true } = options;
 
-  const currentVersion = parse(current);
-  if (!currentVersion) {
-    return null;
-  }
-  const currentUnstable = isUnstable(currentVersion);
+	const currentVersion = parse(current);
+	if (!currentVersion) {
+		return null;
+	}
+	const currentUnstable = isUnstable(currentVersion);
 
-  const respectsLatest =
-    respectLatest && valid(latest) !== null && !gt(current, latest);
+	const respectsLatest =
+		respectLatest && valid(latest) !== null && !gt(current, latest);
 
-  const sameBaseAsCurrent = (candidate: ReturnType<typeof parse>): boolean =>
-    candidate !== null &&
-    candidate.major === currentVersion.major &&
-    candidate.minor === currentVersion.minor &&
-    candidate.patch === currentVersion.patch;
+	const sameBaseAsCurrent = (candidate: ReturnType<typeof parse>): boolean =>
+		candidate !== null &&
+		candidate.major === currentVersion.major &&
+		candidate.minor === currentVersion.minor &&
+		candidate.patch === currentVersion.patch;
 
-  let best: string | null = null;
-  for (const version of versions) {
-    const candidate = parse(version);
-    if (!(candidate && gt(version, current))) {
-      continue;
-    }
-    if (respectsLatest && gt(version, latest)) {
-      continue;
-    }
-    // ignoreUnstable: only allow a prerelease target when the current version
-    // is already a prerelease sharing the same major.minor.patch.
-    if (
-      ignoreUnstable &&
-      isUnstable(candidate) &&
-      !(currentUnstable && sameBaseAsCurrent(candidate))
-    ) {
-      continue;
-    }
-    if (best === null || gt(version, best)) {
-      best = version;
-    }
-  }
+	let best: string | null = null;
+	for (const version of versions) {
+		const candidate = parse(version);
+		if (!(candidate && gt(version, current))) {
+			continue;
+		}
+		if (respectsLatest && gt(version, latest)) {
+			continue;
+		}
+		// ignoreUnstable: only allow a prerelease target when the current version
+		// is already a prerelease sharing the same major.minor.patch.
+		if (
+			ignoreUnstable &&
+			isUnstable(candidate) &&
+			!(currentUnstable && sameBaseAsCurrent(candidate))
+		) {
+			continue;
+		}
+		if (best === null || gt(version, best)) {
+			best = version;
+		}
+	}
 
-  if (best === null) {
-    return null;
-  }
+	if (best === null) {
+		return null;
+	}
 
-  return {
-    current,
-    target: best,
-    updateType: diff(current, best) ?? "patch",
-  };
+	return {
+		current,
+		target: best,
+		updateType: diff(current, best) ?? "patch",
+	};
 }
 
 /**
@@ -103,41 +103,41 @@ export function resolveUpdate(
  * Dependencies that are already up to date (or fail to resolve) are omitted.
  */
 export async function fetchOutdated(
-  dependencies: Dependency[],
-  options: ResolveOptions = {}
+	dependencies: Dependency[],
+	options: ResolveOptions = {},
 ): Promise<Map<string, OutdatedInfo>> {
-  const currentByName = new Map<string, string>();
-  for (const dep of dependencies) {
-    if (!currentByName.has(dep.name)) {
-      currentByName.set(dep.name, dep.version);
-    }
-  }
+	const currentByName = new Map<string, string>();
+	for (const dep of dependencies) {
+		if (!currentByName.has(dep.name)) {
+			currentByName.set(dep.name, dep.version);
+		}
+	}
 
-  const names = [...currentByName.keys()];
-  const chunks: string[][] = [];
-  for (let i = 0; i < names.length; i += BATCH_SIZE) {
-    chunks.push(names.slice(i, i + BATCH_SIZE));
-  }
+	const names = [...currentByName.keys()];
+	const chunks: string[][] = [];
+	for (let i = 0; i < names.length; i += BATCH_SIZE) {
+		chunks.push(names.slice(i, i + BATCH_SIZE));
+	}
 
-  const batches = await Promise.all(
-    chunks.map((chunk) => getVersionsBatch(chunk, { throw: false }))
-  );
+	const batches = await Promise.all(
+		chunks.map((chunk) => getVersionsBatch(chunk, { throw: false })),
+	);
 
-  const updates = new Map<string, OutdatedInfo>();
-  for (const entry of batches.flat()) {
-    if ("error" in entry) {
-      continue;
-    }
-    const current = currentByName.get(entry.name);
-    const latest = entry.distTags.latest;
-    if (!(current && latest)) {
-      continue;
-    }
-    const info = resolveUpdate(current, entry.versions, latest, options);
-    if (info) {
-      updates.set(entry.name, info);
-    }
-  }
+	const updates = new Map<string, OutdatedInfo>();
+	for (const entry of batches.flat()) {
+		if ("error" in entry) {
+			continue;
+		}
+		const current = currentByName.get(entry.name);
+		const latest = entry.distTags.latest;
+		if (!(current && latest)) {
+			continue;
+		}
+		const info = resolveUpdate(current, entry.versions, latest, options);
+		if (info) {
+			updates.set(entry.name, info);
+		}
+	}
 
-  return updates;
+	return updates;
 }
