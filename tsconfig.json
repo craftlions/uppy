@@ -1,0 +1,11 @@
+{
+  "compilerOptions": {
+    "lib": ["ESNext"],
+    "noEmit": true,
+    "types": ["./worker-configuration.d.ts"],
+    "allowImportingTsExtensions": true,
+    "strict": true,
+    "strictNullChecks": true
+  },
+  "include": ["worker-configuration.d.ts", "src/**/*.ts"]
+}

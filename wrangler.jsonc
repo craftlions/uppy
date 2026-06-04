@@ -1,0 +1,63 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "account_id": "1dc7f5dfd6f1830ea5b903d051c6d624",
+  "name": "uppy",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-05-31",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "persist": true,
+      "invocation_logs": true
+    },
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "persist": true
+    }
+  },
+  "workers_dev": true,
+  "preview_urls": false,
+  "limits": {
+    "cpu_ms": 5000
+  },
+  "minify": false,
+  "upload_source_maps": true,
+  "vars": {
+    "SANDBOX_TRANSPORT": "rpc",
+    "GITHUB_APP_ID": "3924701"
+  },
+  // "artifacts": [
+  //   {
+  //     "binding": "ARTIFACTS",
+  //     "namespace": "craftlions",
+  //     "remote": true
+  //   }
+  // ]
+  "containers": [
+    {
+      "class_name": "Sandbox",
+      "image": "./Dockerfile",
+      "instance_type": "basic",
+      "max_instances": 2000
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "class_name": "Sandbox",
+        "name": "Sandbox"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "new_sqlite_classes": ["Sandbox"],
+      "tag": "v1"
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+allowBuilds:
+  esbuild@0.27.3: true
+  sharp@0.34.5: true
+  workerd@1.20260526.1: true
+minimumReleaseAge: 4320
+shellEmulator: true
+paranoid: true
+jailBuilds: true
+trustPolicy: no-downgrade
+minimumReleaseAgeStrict: true
+strictStoreIntegrity: true
+advisoryCheck: required
+advisoryCheckOnInstall: required
+advisoryCheckEveryInstall: true
+strictDepBuilds: true
+blockExoticSubdeps: true
