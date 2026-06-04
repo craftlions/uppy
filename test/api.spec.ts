@@ -19,13 +19,17 @@ function mockReader(files: Record<string, string>): ContentReader {
 describe("configResponse", () => {
 	it("returns 200 with the located path and parsed config", async () => {
 		const octokit = mockReader({
-			"renovate.json5": "{ extends: ['config:recommended'] }",
+			"renovate.json5":
+				"{ extends: ['config:recommended', ':enableVulnerabilityAlerts'] }",
 		});
 		const response = await configResponse(octokit, "acme", "repo");
 		expect(response.status).toBe(200);
 		expect(await response.json()).toEqual({
 			path: "renovate.json5",
-			config: { extends: ["config:recommended"] },
+			config: {
+				extends: ["config:recommended"],
+				vulnerabilityAlerts: { enabled: true },
+			},
 			unknownOptions: [],
 		});
 	});

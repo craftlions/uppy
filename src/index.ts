@@ -14,9 +14,14 @@ import { fetchOutdated } from "./outdated.ts";
 import {
 	detectRenovateConfig,
 	osvVulnerabilityAlertsEnabled,
+	vulnerabilityAlertsEnabled,
 } from "./renovate.ts";
+import {
+	fetchVulnerabilityAlerts,
+	logVulnerabilityAlerts,
+	renderVulnerabilityAlerts,
+} from "./vulnerability-alerts.ts";
 
-// biome-ignore lint/performance/noBarrelFile: @cloudflare/sandbox
 export { Sandbox } from "@cloudflare/sandbox";
 
 const app = new App({
@@ -28,16 +33,13 @@ const app = new App({
 	Octokit: Octokit.plugin(restEndpointMethods),
 });
 
-app.webhooks.on("push", async ({ octokit, id, name, payload }) => {
+app.webhooks.on("push", async ({ id, name }) => {
 	console.log(`Received event ${name} with id ${id}`);
 });
 
-app.webhooks.on(
-	"pull_request.closed",
-	async ({ octokit, id, name, payload }) => {
-		console.log(`Received event ${name} with id ${id}`);
-	},
-);
+app.webhooks.on("pull_request.closed", async ({ id, name }) => {
+	console.log(`Received event ${name} with id ${id}`);
+});
 
 /** Resolve an installation-scoped Octokit for the app's install on a repo. */
 async function installationOctokitFor(owner: string, repo: string) {
@@ -74,13 +76,28 @@ async function triggerUppyRun({
 		repository,
 	);
 	console.log("Config result:", configResult);
+	const config =
+		configResult.ok && configResult.data !== null
+			? configResult.data.config
+			: undefined;
+	let vulnerabilityAlertsMarkdown = "";
+	if (config && vulnerabilityAlertsEnabled(config)) {
+		try {
+			const alerts = await fetchVulnerabilityAlerts(
+				octokit,
+				organization,
+				repository,
+			);
+			console.log("GitHub vulnerability alerts:", alerts);
+			logVulnerabilityAlerts(alerts);
+			vulnerabilityAlertsMarkdown = renderVulnerabilityAlerts(alerts);
+		} catch (cause) {
+			const message = cause instanceof Error ? cause.message : String(cause);
+			console.log(`GitHub vulnerability alert check failed: ${message}`);
+		}
+	}
 	let osvAlertsMarkdown = "";
-	if (
-		npm &&
-		configResult.ok &&
-		configResult.data !== null &&
-		osvVulnerabilityAlertsEnabled(configResult.data.config)
-	) {
+	if (npm && config && osvVulnerabilityAlertsEnabled(config)) {
 		try {
 			const alerts = await fetchOsvVulnerabilityAlerts(
 				npm.files.flatMap((file) => file.dependencies),
@@ -100,9 +117,13 @@ async function triggerUppyRun({
 	const dashboardMarkdown = `This issue lists Uppy updates and detected dependencies.\n\nLast updated at ${new Date().toISOString()}${
 		detected ? `\n\n${detected}` : ""
 	}`;
-	const body = osvAlertsMarkdown
-		? `${osvAlertsMarkdown}\n\n${dashboardMarkdown}`
-		: dashboardMarkdown;
+	const alertSections = [vulnerabilityAlertsMarkdown, osvAlertsMarkdown].filter(
+		Boolean,
+	);
+	const body =
+		alertSections.length > 0
+			? `${alertSections.join("\n\n")}\n\n${dashboardMarkdown}`
+			: dashboardMarkdown;
 
 	if (issues.data.length > 0) {
 		await octokit.rest.issues.update({

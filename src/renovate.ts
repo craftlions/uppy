@@ -20,6 +20,7 @@ export const KNOWN_RENOVATE_CONFIG_OPTIONS = [
 	"ignoreUnstable",
 	"osvVulnerabilityAlerts",
 	"respectLatest",
+	"vulnerabilityAlerts",
 ] as const;
 
 const knownRenovateConfigOptions = new Set<string>(
@@ -79,7 +80,88 @@ export function parseRenovateConfig(
 	if (value === null || typeof value !== "object" || Array.isArray(value)) {
 		return err(new Error(`Renovate config ${path} must be a JSON object`));
 	}
-	return ok(value as RenovateConfig);
+	return ok(mergeRenovatePresetConfig(value as RenovateConfig));
+}
+
+const RENOVATE_PRESET_CONFIGS: Record<string, RenovateConfig> = {
+	":enableVulnerabilityAlerts": {
+		vulnerabilityAlerts: {
+			enabled: true,
+		},
+	},
+};
+
+const isRecord = (value: unknown): value is RenovateConfig =>
+	value !== null && typeof value === "object" && !Array.isArray(value);
+
+function mergeConfig(
+	base: RenovateConfig,
+	override: RenovateConfig,
+): RenovateConfig {
+	const merged: RenovateConfig = { ...base };
+	for (const [key, value] of Object.entries(override)) {
+		const current = merged[key];
+		merged[key] =
+			isRecord(current) && isRecord(value)
+				? mergeConfig(current, value)
+				: value;
+	}
+	return merged;
+}
+
+function extendsPresets(config: RenovateConfig): string[] {
+	const extendsValue = config.extends;
+	if (typeof extendsValue === "string") {
+		return [extendsValue];
+	}
+	if (Array.isArray(extendsValue)) {
+		return extendsValue.filter(
+			(preset): preset is string => typeof preset === "string",
+		);
+	}
+	return [];
+}
+
+function removeMergedPresets(config: RenovateConfig): RenovateConfig {
+	const extendsValue = config.extends;
+	if (typeof extendsValue === "string") {
+		return RENOVATE_PRESET_CONFIGS[extendsValue]
+			? Object.fromEntries(
+					Object.entries(config).filter(([key]) => key !== "extends"),
+				)
+			: config;
+	}
+	if (!Array.isArray(extendsValue)) {
+		return config;
+	}
+	const remainingExtends = extendsValue.filter(
+		(preset) =>
+			typeof preset !== "string" ||
+			RENOVATE_PRESET_CONFIGS[preset] === undefined,
+	);
+	if (remainingExtends.length === extendsValue.length) {
+		return config;
+	}
+	if (remainingExtends.length === 0) {
+		return Object.fromEntries(
+			Object.entries(config).filter(([key]) => key !== "extends"),
+		);
+	}
+	return { ...config, extends: remainingExtends };
+}
+
+/** Merge worker-supported Renovate presets into the returned config object. */
+export function mergeRenovatePresetConfig(
+	config: RenovateConfig,
+): RenovateConfig {
+	const presetConfig = extendsPresets(config).reduce<RenovateConfig>(
+		(merged, preset) => {
+			const next = RENOVATE_PRESET_CONFIGS[preset];
+			return next ? mergeConfig(merged, next) : merged;
+		},
+		{},
+	);
+	return mergeConfig(presetConfig, removeMergedPresets(config));
 }
 
 /** Return top-level config option names not handled by this parser. */
@@ -92,6 +174,12 @@ export function unknownRenovateConfigOptions(config: RenovateConfig): string[] {
 /** Return whether OSV vulnerability alert checks are enabled in config. */
 export function osvVulnerabilityAlertsEnabled(config: RenovateConfig): boolean {
 	return config.osvVulnerabilityAlerts === true;
+}
+
+/** Return whether GitHub Vulnerability Alert checks are enabled in config. */
+export function vulnerabilityAlertsEnabled(config: RenovateConfig): boolean {
+	const vulnerabilityAlerts = config.vulnerabilityAlerts;
+	return isRecord(vulnerabilityAlerts) && vulnerabilityAlerts.enabled === true;
 }
 
 /**

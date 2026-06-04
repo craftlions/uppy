@@ -2,10 +2,12 @@ import type { ContentReader } from "../src/deps.ts";
 import { describe, expect, it, vi } from "vitest";
 import {
 	detectRenovateConfig,
+	mergeRenovatePresetConfig,
 	osvVulnerabilityAlertsEnabled,
 	parseRenovateConfig,
 	RENOVATE_CONFIG_PATHS,
 	unknownRenovateConfigOptions,
+	vulnerabilityAlertsEnabled,
 } from "../src/renovate.ts";
 
 /** Build a mocked Octokit whose getContent serves base64 file fixtures. */
@@ -48,6 +50,33 @@ describe("parseRenovateConfig", () => {
 		});
 	});
 
+	it("merges the :enableVulnerabilityAlerts preset from extends", () => {
+		const result = parseRenovateConfig(
+			"{ extends: ['config:recommended', ':enableVulnerabilityAlerts'] }",
+			"renovate.json5",
+		);
+		expect(result).toEqual({
+			ok: true,
+			data: {
+				extends: ["config:recommended"],
+				vulnerabilityAlerts: { enabled: true },
+			},
+		});
+	});
+
+	it("lets explicit vulnerabilityAlerts config override preset values", () => {
+		const result = parseRenovateConfig(
+			"{ extends: [':enableVulnerabilityAlerts'], vulnerabilityAlerts: { enabled: false } }",
+			"renovate.json5",
+		);
+		expect(result).toEqual({
+			ok: true,
+			data: {
+				vulnerabilityAlerts: { enabled: false },
+			},
+		});
+	});
+
 	it("parses the extension-less .renovaterc as JSONC", () => {
 		const result = parseRenovateConfig('{ "a": 1 }', ".renovaterc");
 		expect(result).toEqual({ ok: true, data: { a: 1 } });
@@ -80,8 +109,21 @@ describe("unknownRenovateConfigOptions", () => {
 				osvVulnerabilityAlerts: true,
 				packageRules: [],
 				timezone: "UTC",
+				vulnerabilityAlerts: { enabled: true },
 			}),
 		).toEqual(["packageRules", "timezone"]);
+	});
+});
+
+describe("mergeRenovatePresetConfig", () => {
+	it("supports a string extends value", () => {
+		expect(
+			mergeRenovatePresetConfig({
+				extends: ":enableVulnerabilityAlerts",
+			}),
+		).toEqual({
+			vulnerabilityAlerts: { enabled: true },
+		});
 	});
 });
 
@@ -94,6 +136,18 @@ describe("osvVulnerabilityAlertsEnabled", () => {
 			osvVulnerabilityAlertsEnabled({ osvVulnerabilityAlerts: false }),
 		).toBe(false);
 		expect(osvVulnerabilityAlertsEnabled({})).toBe(false);
+	});
+});
+
+describe("vulnerabilityAlertsEnabled", () => {
+	it("enables GitHub checks only when vulnerabilityAlerts.enabled is true", () => {
+		expect(
+			vulnerabilityAlertsEnabled({ vulnerabilityAlerts: { enabled: true } }),
+		).toBe(true);
+		expect(
+			vulnerabilityAlertsEnabled({ vulnerabilityAlerts: { enabled: false } }),
+		).toBe(false);
+		expect(vulnerabilityAlertsEnabled({})).toBe(false);
 	});
 });
 
