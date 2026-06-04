@@ -1,0 +1,3 @@
+[tools]
+"github:endevco/aube" = "1.17.1"
+"core:node" = "26.3.0"
