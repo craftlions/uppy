@@ -25,7 +25,6 @@
   "limits": {
     "cpu_ms": 5000
   },
-  "minify": false,
   "upload_source_maps": true,
   "vars": {
     "SANDBOX_TRANSPORT": "rpc",

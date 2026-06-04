@@ -4,6 +4,7 @@ import { Octokit } from "@octokit/core";
 import { restEndpointMethods } from "@octokit/plugin-rest-endpoint-methods";
 import { createWebMiddleware } from "@octokit/webhooks";
 import { detectDependencies, renderDependencies } from "./deps.ts";
+import { fetchOutdated } from "./outdated.ts";
 
 // biome-ignore lint/performance/noBarrelFile: @cloudflare/sandbox
 export { Sandbox } from "@cloudflare/sandbox";
@@ -53,7 +54,11 @@ async function triggerUppyRun({
     organization,
     repository
   );
-  const detected = renderDependencies(ecosystems);
+  const npm = ecosystems.find((eco) => eco.ecosystem === "npm");
+  const updates = npm
+    ? await fetchOutdated(npm.files.flatMap((file) => file.dependencies))
+    : undefined;
+  const detected = renderDependencies(ecosystems, updates);
   const body = `This issue lists Uppy updates and detected dependencies.\n\nLast updated at ${new Date().toISOString()}${
     detected ? `\n\n${detected}` : ""
   }`;

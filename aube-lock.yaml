@@ -12,6 +12,7 @@ time:
   '@octokit/plugin-rest-endpoint-methods@17.0.0': 2025-10-31T01:16:01.283Z
   '@octokit/webhooks@14.2.0': 2025-12-03T18:02:08.975Z
   '@types/node@25.9.1': 2026-05-19T17:49:12.417Z
+  '@types/semver@7.7.1': 2025-09-03T15:02:35.366Z
   '@typescript/native-preview@7.0.0-dev.20260527.2': 2026-05-27T23:29:13.671Z
   '@vitest/coverage-istanbul@4.1.7': 2026-05-20T07:19:56.100Z
   '@vitest/runner@4.1.7': 2026-05-20T07:19:23.373Z
@@ -65,6 +66,9 @@ importers:
       fast-npm-meta:
         specifier: 2.0.0
         version: 2.0.0
+      semver:
+        specifier: 7.8.1
+        version: 7.8.1
       ultracite:
         specifier: 7.8.0
         version: 7.8.0
@@ -81,6 +85,9 @@ importers:
       '@cloudflare/vitest-pool-workers':
         specifier: 0.16.10
         version: 0.16.10(@vitest/runner@4.1.7)(@vitest/snapshot@4.1.7)(vitest@4.1.7(@types/node@25.9.1)(@vitest/coverage-istanbul@4.1.7)(vite@8.0.14(@types/node@25.9.1)(esbuild@0.27.3)(yaml@2.9.0)))
+      '@types/semver':
+        specifier: 7.7.1
+        version: 7.7.1
       '@vitest/coverage-istanbul':
         specifier: 4.1.7
         version: 4.1.7(vitest@4.1.7)
@@ -679,6 +686,9 @@ packages:
 
   '@types/node@25.9.1':
     resolution: {integrity: sha512-xfrlY7UD5rMJk3ZVJP8BNzS28J36YJg+xp+LPXV1TdWxr8uMH5A860QNxYDGQe/ylDSgjxE52Q9VnO7p75tJxg==}
+
+  '@types/semver@7.7.1':
+    resolution: {integrity: sha512-FmgJfu+MOcQ370SD0ev7EI8TlCAfKYU+B4m5T3yXc1CiRN94g/SZPtsCkk506aUDtlMnFZvasDwHHUcZUEaYuA==}
 
   '@typescript/native-preview-darwin-arm64@7.0.0-dev.20260527.2':
     resolution: {integrity: sha512-3LqSu4DlxkEfeC/Z/29QMCJn5jjkDtXI7LYuxfmjdmAatS6umDKqm8J17fnP/7fyrZUMBTIYRwSDpChGV3G1ew==}
@@ -1788,6 +1798,8 @@ snapshots:
   '@types/node@25.9.1':
     dependencies:
       undici-types: 7.24.6
+
+  '@types/semver@7.7.1': {}
 
   '@typescript/native-preview-darwin-arm64@7.0.0-dev.20260527.2': {}
 

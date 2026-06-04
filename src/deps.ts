@@ -14,6 +14,20 @@ export interface DependencyEcosystem {
 }
 
 /**
+ * The result of a Renovate-style update check for a single dependency: the
+ * version it would be bumped to and the kind of bump. Produced by
+ * `resolveUpdate` in `./outdated.ts` and keyed by package name.
+ */
+export interface OutdatedInfo {
+  /** The version currently pinned in the manifest. */
+  current: string;
+  /** The version Renovate's default policy would update to. */
+  target: string;
+  /** Semver bump type from current to target, e.g. `major`, `minor`, `patch`. */
+  updateType: string;
+}
+
+/**
  * Minimal Octokit shape required to read file contents. Keeping it narrow makes
  * the function trivial to mock in unit tests while staying compatible with a
  * real Octokit instance.
@@ -170,22 +184,60 @@ export async function detectDependencies(
 const countDependencies = (eco: DependencyEcosystem): number =>
   eco.files.reduce((sum, file) => sum + file.dependencies.length, 0);
 
-/** Render detected dependencies as a Markdown table per ecosystem. */
-export function renderDependencies(ecosystems: DependencyEcosystem[]): string {
+const UP_TO_DATE = "✅ up to date";
+
+/** Render a plain `Package | Version | Manifest` table for an ecosystem. */
+function renderPlainSection(eco: DependencyEcosystem): string {
+  const rows = eco.files
+    .flatMap((file) =>
+      file.dependencies.map(
+        (dep) => `| \`${dep.name}\` | \`${dep.version}\` | \`${file.file}\` |`
+      )
+    )
+    .join("\n");
+  return `### ${eco.ecosystem} (${countDependencies(eco)})\n\n| Package | Version | Manifest |\n| --- | --- | --- |\n${rows}`;
+}
+
+/**
+ * Render an ecosystem with extra `Target` and `Update` columns, flagging the
+ * deps that Renovate's default policy would bump. Deps without an entry in
+ * `updates` are shown as up to date.
+ */
+function renderUpdatableSection(
+  eco: DependencyEcosystem,
+  updates: Map<string, OutdatedInfo>
+): string {
+  const rows = eco.files
+    .flatMap((file) =>
+      file.dependencies.map((dep) => {
+        const update = updates.get(dep.name);
+        const target = update ? `\`${update.target}\`` : "—";
+        const kind = update ? update.updateType : UP_TO_DATE;
+        return `| \`${dep.name}\` | \`${dep.version}\` | ${target} | ${kind} | \`${file.file}\` |`;
+      })
+    )
+    .join("\n");
+  return `### ${eco.ecosystem} (${countDependencies(eco)})\n\n| Package | Current | Target | Update | Manifest |\n| --- | --- | --- | --- | --- |\n${rows}`;
+}
+
+/**
+ * Render detected dependencies as a Markdown table per ecosystem. When an
+ * `updates` map is supplied, the `npm` ecosystem gains `Target`/`Update`
+ * columns describing the Renovate-style bump for each outdated dependency.
+ */
+export function renderDependencies(
+  ecosystems: DependencyEcosystem[],
+  updates?: Map<string, OutdatedInfo>
+): string {
   if (ecosystems.length === 0) {
     return "";
   }
 
-  const sections = ecosystems.map((eco) => {
-    const rows = eco.files
-      .flatMap((file) =>
-        file.dependencies.map(
-          (dep) => `| \`${dep.name}\` | \`${dep.version}\` | \`${file.file}\` |`
-        )
-      )
-      .join("\n");
-    return `### ${eco.ecosystem} (${countDependencies(eco)})\n\n| Package | Version | Manifest |\n| --- | --- | --- |\n${rows}`;
-  });
+  const sections = ecosystems.map((eco) =>
+    updates && eco.ecosystem === "npm"
+      ? renderUpdatableSection(eco, updates)
+      : renderPlainSection(eco)
+  );
 
   return `## Detected Dependencies\n\n${sections.join("\n\n")}`;
 }
