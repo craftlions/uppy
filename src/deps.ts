@@ -115,7 +115,7 @@ export function parsePackageJson(content: string): Dependency[] {
 }
 
 /** Read a file from a repository and decode it, or null if it is missing. */
-async function fetchFileContent(
+export async function fetchFileContent(
   octokit: ContentReader,
   owner: string,
   repo: string,

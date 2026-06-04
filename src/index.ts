@@ -3,6 +3,7 @@ import { App } from "@octokit/app";
 import { Octokit } from "@octokit/core";
 import { restEndpointMethods } from "@octokit/plugin-rest-endpoint-methods";
 import { createWebMiddleware } from "@octokit/webhooks";
+import { configResponse } from "./api.ts";
 import { detectDependencies, renderDependencies } from "./deps.ts";
 import { fetchOutdated } from "./outdated.ts";
 
@@ -29,6 +30,13 @@ app.webhooks.on(
   }
 );
 
+/** Resolve an installation-scoped Octokit for the app's install on a repo. */
+async function installationOctokitFor(owner: string, repo: string) {
+  const { data: installation } =
+    await app.octokit.rest.apps.getRepoInstallation({ owner, repo });
+  return app.getInstallationOctokit(installation.id);
+}
+
 async function triggerUppyRun({
   organization,
   repository,
@@ -36,12 +44,7 @@ async function triggerUppyRun({
   organization: string;
   repository: string;
 }) {
-  const { data: installation } =
-    await app.octokit.rest.apps.getRepoInstallation({
-      owner: organization,
-      repo: repository,
-    });
-  const octokit = await app.getInstallationOctokit(installation.id);
+  const octokit = await installationOctokitFor(organization, repository);
   const issues = await octokit.rest.issues.listForRepo({
     owner: organization,
     repo: repository,
@@ -88,6 +91,30 @@ export default {
 
     if (url.pathname === "/api/github/webhooks") {
       return middleware(request);
+    }
+    if (request.method === "GET" && url.pathname === "/config") {
+      const organization = url.searchParams.get("organization");
+      const repository = url.searchParams.get("repository");
+      if (!(organization && repository)) {
+        return Response.json(
+          {
+            error: "Missing 'organization' or 'repository' query parameter",
+          },
+          { status: 400 }
+        );
+      }
+      try {
+        const octokit = await installationOctokitFor(organization, repository);
+        return await configResponse(octokit, organization, repository);
+      } catch (cause) {
+        const message = cause instanceof Error ? cause.message : String(cause);
+        return Response.json(
+          {
+            error: `Failed to access ${organization}/${repository}: ${message}`,
+          },
+          { status: 502 }
+        );
+      }
     }
     if (request.method === "POST" && url.pathname === "/runs") {
       const body = await request.json();
