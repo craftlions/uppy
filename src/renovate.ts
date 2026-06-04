@@ -16,6 +16,7 @@ export type RenovateConfig = Record<string, unknown>;
  */
 export const KNOWN_RENOVATE_CONFIG_OPTIONS = [
 	"$schema",
+	"dependencyDashboard",
 	"extends",
 	"ignoreUnstable",
 	"osvVulnerabilityAlerts",
@@ -84,10 +85,19 @@ export function parseRenovateConfig(
 }
 
 const RENOVATE_PRESET_CONFIGS: Record<string, RenovateConfig> = {
+	":dependencyDashboard": {
+		dependencyDashboard: true,
+	},
 	":enableVulnerabilityAlerts": {
 		vulnerabilityAlerts: {
 			enabled: true,
 		},
+	},
+	"config:best-practices": {
+		extends: ["config:recommended"],
+	},
+	"config:recommended": {
+		extends: [":dependencyDashboard"],
 	},
 };
 
@@ -154,10 +164,27 @@ function removeMergedPresets(config: RenovateConfig): RenovateConfig {
 export function mergeRenovatePresetConfig(
 	config: RenovateConfig,
 ): RenovateConfig {
+	const resolvePresetConfig = (
+		preset: string,
+		seen: Set<string>,
+	): RenovateConfig => {
+		const presetConfig = RENOVATE_PRESET_CONFIGS[preset];
+		if (!presetConfig || seen.has(preset)) {
+			return {};
+		}
+		const nextSeen = new Set(seen).add(preset);
+		const nestedPresetConfig = extendsPresets(
+			presetConfig,
+		).reduce<RenovateConfig>(
+			(merged, nestedPreset) =>
+				mergeConfig(merged, resolvePresetConfig(nestedPreset, nextSeen)),
+			{},
+		);
+		return mergeConfig(nestedPresetConfig, removeMergedPresets(presetConfig));
+	};
 	const presetConfig = extendsPresets(config).reduce<RenovateConfig>(
 		(merged, preset) => {
-			const next = RENOVATE_PRESET_CONFIGS[preset];
-			return next ? mergeConfig(merged, next) : merged;
+			return mergeConfig(merged, resolvePresetConfig(preset, new Set()));
 		},
 		{},
 	);
@@ -169,6 +196,11 @@ export function unknownRenovateConfigOptions(config: RenovateConfig): string[] {
 	return Object.keys(config).filter(
 		(option) => !knownRenovateConfigOptions.has(option),
 	);
+}
+
+/** Return whether Renovate Dependency Dashboard checks are enabled in config. */
+export function dependencyDashboardEnabled(config: RenovateConfig): boolean {
+	return config.dependencyDashboard === true;
 }
 
 /** Return whether OSV vulnerability alert checks are enabled in config. */

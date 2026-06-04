@@ -27,7 +27,7 @@ describe("configResponse", () => {
 		expect(await response.json()).toEqual({
 			path: "renovate.json5",
 			config: {
-				extends: ["config:recommended"],
+				dependencyDashboard: true,
 				vulnerabilityAlerts: { enabled: true },
 			},
 			unknownOptions: [],
@@ -44,7 +44,7 @@ describe("configResponse", () => {
 		expect(await response.json()).toEqual({
 			path: "renovate.json5",
 			config: {
-				extends: ["config:recommended"],
+				dependencyDashboard: true,
 				packageRules: [],
 				timezone: "UTC",
 			},

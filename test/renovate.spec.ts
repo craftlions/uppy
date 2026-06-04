@@ -1,6 +1,7 @@
 import type { ContentReader } from "../src/deps.ts";
 import { describe, expect, it, vi } from "vitest";
 import {
+	dependencyDashboardEnabled,
 	detectRenovateConfig,
 	mergeRenovatePresetConfig,
 	osvVulnerabilityAlertsEnabled,
@@ -35,7 +36,7 @@ describe("parseRenovateConfig", () => {
 		);
 		expect(result).toEqual({
 			ok: true,
-			data: { extends: ["config:recommended"] },
+			data: { dependencyDashboard: true },
 		});
 	});
 
@@ -46,7 +47,7 @@ describe("parseRenovateConfig", () => {
 		);
 		expect(result).toEqual({
 			ok: true,
-			data: { extends: ["config:recommended"] },
+			data: { dependencyDashboard: true },
 		});
 	});
 
@@ -58,8 +59,60 @@ describe("parseRenovateConfig", () => {
 		expect(result).toEqual({
 			ok: true,
 			data: {
-				extends: ["config:recommended"],
+				dependencyDashboard: true,
 				vulnerabilityAlerts: { enabled: true },
+			},
+		});
+	});
+
+	it("merges the :dependencyDashboard preset from extends", () => {
+		const result = parseRenovateConfig(
+			"{ extends: ['config:recommended', ':dependencyDashboard'] }",
+			"renovate.json5",
+		);
+		expect(result).toEqual({
+			ok: true,
+			data: {
+				dependencyDashboard: true,
+			},
+		});
+	});
+
+	it("merges nested presets from config:recommended", () => {
+		const result = parseRenovateConfig(
+			"{ extends: ['config:recommended'] }",
+			"renovate.json5",
+		);
+		expect(result).toEqual({
+			ok: true,
+			data: {
+				dependencyDashboard: true,
+			},
+		});
+	});
+
+	it("merges nested presets from config:best-practices", () => {
+		const result = parseRenovateConfig(
+			"{ extends: ['config:best-practices'] }",
+			"renovate.json5",
+		);
+		expect(result).toEqual({
+			ok: true,
+			data: {
+				dependencyDashboard: true,
+			},
+		});
+	});
+
+	it("lets explicit dependencyDashboard config override preset values", () => {
+		const result = parseRenovateConfig(
+			"{ extends: [':dependencyDashboard'], dependencyDashboard: false }",
+			"renovate.json5",
+		);
+		expect(result).toEqual({
+			ok: true,
+			data: {
+				dependencyDashboard: false,
 			},
 		});
 	});
@@ -104,6 +157,7 @@ describe("unknownRenovateConfigOptions", () => {
 		expect(
 			unknownRenovateConfigOptions({
 				$schema: "https://docs.renovatebot.com/renovate-schema.json",
+				dependencyDashboard: true,
 				extends: ["config:recommended"],
 				ignoreUnstable: false,
 				osvVulnerabilityAlerts: true,
@@ -124,6 +178,18 @@ describe("mergeRenovatePresetConfig", () => {
 		).toEqual({
 			vulnerabilityAlerts: { enabled: true },
 		});
+	});
+});
+
+describe("dependencyDashboardEnabled", () => {
+	it("enables dashboard issue updates only when the option is true", () => {
+		expect(dependencyDashboardEnabled({ dependencyDashboard: true })).toBe(
+			true,
+		);
+		expect(dependencyDashboardEnabled({ dependencyDashboard: false })).toBe(
+			false,
+		);
+		expect(dependencyDashboardEnabled({})).toBe(false);
 	});
 });
 
@@ -169,7 +235,7 @@ describe("detectRenovateConfig", () => {
 			ok: true,
 			data: {
 				path: "renovate.json5",
-				config: { extends: ["config:recommended"] },
+				config: { dependencyDashboard: true },
 			},
 		});
 	});

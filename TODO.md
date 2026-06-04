@@ -9,7 +9,6 @@
 - :pinDevDependencies -> support pinning https://docs.renovatebot.com/presets-default/#pindevdependencies
 - add dry mode / website mode
 - security:minimumReleaseAgeNpm -> force security / paranoid https://docs.renovatebot.com/presets-security/#securityminimumreleaseagenpm
-- :dependencyDashboard -> add config for dependencydashboard https://docs.renovatebot.com/presets-default/#dependencydashboard
 
 ## Stretch Goals
 

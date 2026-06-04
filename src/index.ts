@@ -12,6 +12,7 @@ import {
 } from "./osv.ts";
 import { fetchOutdated } from "./outdated.ts";
 import {
+	dependencyDashboardEnabled,
 	detectRenovateConfig,
 	osvVulnerabilityAlertsEnabled,
 	vulnerabilityAlertsEnabled,
@@ -56,20 +57,6 @@ async function triggerUppyRun({
 	repository: string;
 }) {
 	const octokit = await installationOctokitFor(organization, repository);
-	const issues = await octokit.rest.issues.listForRepo({
-		owner: organization,
-		repo: repository,
-		state: "open",
-		creator: "craftlions-uppy[bot]",
-	});
-	console.log("Issues:", issues.data[0].id);
-	const ecosystems = await detectDependencies(
-		octokit,
-		organization,
-		repository,
-	);
-	console.log("Ecosystems:", ecosystems);
-	const npm = ecosystems.find((eco) => eco.ecosystem === "npm");
 	const configResult = await detectRenovateConfig(
 		octokit,
 		organization,
@@ -80,6 +67,24 @@ async function triggerUppyRun({
 		configResult.ok && configResult.data !== null
 			? configResult.data.config
 			: undefined;
+	if (!(config && dependencyDashboardEnabled(config))) {
+		console.log("Renovate dependency dashboard is not enabled");
+		return;
+	}
+	const issues = await octokit.rest.issues.listForRepo({
+		owner: organization,
+		repo: repository,
+		state: "open",
+		creator: "craftlions-uppy[bot]",
+	});
+	console.log("Issues:", issues.data[0]?.id);
+	const ecosystems = await detectDependencies(
+		octokit,
+		organization,
+		repository,
+	);
+	console.log("Ecosystems:", ecosystems);
+	const npm = ecosystems.find((eco) => eco.ecosystem === "npm");
 	let vulnerabilityAlertsMarkdown = "";
 	if (config && vulnerabilityAlertsEnabled(config)) {
 		try {
@@ -126,6 +131,7 @@ async function triggerUppyRun({
 			: dashboardMarkdown;
 
 	if (issues.data.length > 0) {
+		console.log("Updating existing issue:", issues.data[0].id);
 		await octokit.rest.issues.update({
 			owner: organization,
 			repo: repository,
