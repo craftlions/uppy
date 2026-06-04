@@ -3,6 +3,7 @@ import { App } from "@octokit/app";
 import { Octokit } from "@octokit/core";
 import { restEndpointMethods } from "@octokit/plugin-rest-endpoint-methods";
 import { createWebMiddleware } from "@octokit/webhooks";
+import { detectDependencies, renderDependencies } from "./deps.ts";
 
 // biome-ignore lint/performance/noBarrelFile: @cloudflare/sandbox
 export { Sandbox } from "@cloudflare/sandbox";
@@ -46,20 +47,30 @@ async function triggerUppyRun({
     state: "open",
     creator: "craftlions-uppy[bot]",
   });
-  console.log(issues);
+
+  const ecosystems = await detectDependencies(
+    octokit,
+    organization,
+    repository
+  );
+  const detected = renderDependencies(ecosystems);
+  const body = `This issue lists Uppy updates and detected dependencies.\n\nLast updated at ${new Date().toISOString()}${
+    detected ? `\n\n${detected}` : ""
+  }`;
+
   if (issues.data.length > 0) {
     await octokit.rest.issues.update({
       owner: organization,
       repo: repository,
       issue_number: issues.data[0].number,
-      body: `This issue lists Uppy updates and detected dependencies.\n\nLast updated at ${new Date().toISOString()}`,
+      body,
     });
   } else {
     await octokit.rest.issues.create({
       owner: organization,
       repo: repository,
       title: "Uppy Dashboard",
-      body: "This issue lists Uppy updates and detected dependencies.",
+      body,
     });
   }
 }
