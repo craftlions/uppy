@@ -1,6 +1,6 @@
 import type { WorkflowEvent } from "cloudflare:workers";
 import { WorkflowEntrypoint, type WorkflowStep } from "cloudflare:workers";
-import { repositoryAccessFor } from "..";
+import { repositoryAccessFor } from "../github.ts";
 
 type Params = { branch?: string };
 

@@ -4,6 +4,7 @@
     "noEmit": true,
     "types": ["./worker-configuration.d.ts"],
     "allowImportingTsExtensions": true,
+    "skipLibCheck": true,
     "strict": true,
     "strictNullChecks": true
   },

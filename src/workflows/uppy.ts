@@ -5,7 +5,8 @@ import {
 	listSafeUpgrades,
 	renderDependencies,
 } from "../deps.ts";
-import { nanoid, repositoryAccessFor } from "../index.ts";
+import { repositoryAccessFor } from "../github.ts";
+import { nanoid } from "../ids.ts";
 import { fetchMiseOutdated } from "../mise.ts";
 import {
 	fetchOsvVulnerabilityAlerts,

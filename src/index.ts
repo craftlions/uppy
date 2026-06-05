@@ -1,19 +1,8 @@
 import { env } from "cloudflare:workers";
-import { App } from "@octokit/app";
-import { Octokit } from "@octokit/core";
-import { restEndpointMethods } from "@octokit/plugin-rest-endpoint-methods";
 import { createWebMiddleware } from "@octokit/webhooks";
-import { customAlphabet } from "nanoid";
 import { configResponse } from "./api.ts";
-
-const app = new App({
-	appId: env.GITHUB_APP_ID,
-	privateKey: env.GITHUB_APP_PRIVATE_KEY,
-	webhooks: {
-		secret: env.GITHUB_APP_WEBHOOK_SECRET,
-	},
-	Octokit: Octokit.plugin(restEndpointMethods),
-});
+import { app, repositoryAccessFor } from "./github.ts";
+import { nanoid } from "./ids.ts";
 
 app.webhooks.on("push", async ({ id, name }) => {
 	console.log(`Received event ${name} with id ${id}`);
@@ -23,33 +12,25 @@ app.webhooks.on("pull_request.closed", async ({ id, name }) => {
 	console.log(`Received event ${name} with id ${id}`);
 });
 
-interface RepositoryAccess {
-	defaultBranch: string;
-	htmlUrl: string;
-	installationId: number;
-	octokit: Awaited<ReturnType<typeof app.getInstallationOctokit>>;
-}
-
-/** Resolve installation-scoped repository access for the app's install. */
-export async function repositoryAccessFor(
-	owner: string,
-	repo: string,
-): Promise<RepositoryAccess> {
-	const { data: installation } =
-		await app.octokit.rest.apps.getRepoInstallation({ owner, repo });
-	const octokit = await app.getInstallationOctokit(installation.id);
-	const { data: repository } = await octokit.rest.repos.get({ owner, repo });
-	return {
-		defaultBranch: repository.default_branch,
-		htmlUrl: repository.html_url,
-		installationId: installation.id,
-		octokit,
-	};
-}
-
-export const nanoid = customAlphabet("abcdefghijklmnopqrstuvwxyz0123456789", 6);
-
 const middleware = createWebMiddleware(app.webhooks);
+
+type RunRequestBody = {
+	organization: string;
+	repository: string;
+};
+
+function isRunRequestBody(value: unknown): value is RunRequestBody {
+	return (
+		typeof value === "object" &&
+		value !== null &&
+		"organization" in value &&
+		"repository" in value &&
+		typeof value.organization === "string" &&
+		typeof value.repository === "string" &&
+		value.organization.length > 0 &&
+		value.repository.length > 0
+	);
+}
 
 export { MiseWorkflow } from "./workflows/mise.ts";
 export { UppyWorkflow } from "./workflows/uppy.ts";
@@ -86,7 +67,15 @@ export default {
 			}
 		}
 		if (request.method === "POST" && url.pathname === "/runs") {
-			const body = await request.json(); // TODO add zod v4 safeParseAsync validation
+			const body = await request.json().catch(() => null);
+			if (!isRunRequestBody(body)) {
+				return Response.json(
+					{
+						error: "Expected JSON body with 'organization' and 'repository'",
+					},
+					{ status: 400 },
+				);
+			}
 			await env.UPPY_WORKFLOW.create({
 				id: `${body.organization}-${body.repository}-${nanoid()}`,
 				params: {

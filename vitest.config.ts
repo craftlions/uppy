@@ -7,6 +7,7 @@ export default defineConfig({
 			enabled: true,
 			provider: "istanbul",
 		},
+		include: ["test/**/*.ts"],
 	},
 	plugins: [
 		cloudflareTest({
