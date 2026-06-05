@@ -39,7 +39,7 @@ export class UppyWorkflow extends WorkflowEntrypoint<Env, Params> {
 	async run(event: WorkflowEvent<Params>, step: WorkflowStep) {
 		const { organization, repository } = event.payload;
 
-		const detectedConfig = await step.do("detect Renovate config", async () => {
+		const detectedConfig = await step.do("detect-renovate-config", async () => {
 			const { octokit } = await repositoryAccessFor(organization, repository);
 			const result = await detectRenovateConfig(
 				octokit,
@@ -54,7 +54,7 @@ export class UppyWorkflow extends WorkflowEntrypoint<Env, Params> {
 
 		const config = detectedConfig?.config;
 
-		const ecosystems = await step.do("detect dependencies", async () => {
+		const ecosystems = await step.do("detect-dependencies", async () => {
 			const { octokit } = await repositoryAccessFor(organization, repository);
 			return await detectDependencies(octokit, organization, repository);
 		});
@@ -62,7 +62,7 @@ export class UppyWorkflow extends WorkflowEntrypoint<Env, Params> {
 		let vulnerabilityAlerts: DependabotAlert[] = [];
 		if (config && vulnerabilityAlertsEnabled(config)) {
 			vulnerabilityAlerts = await step.do(
-				"fetch GitHub vulnerability alerts",
+				"fetch-github-vulnerability-alerts",
 				async () => {
 					const { octokit } = await repositoryAccessFor(
 						organization,
@@ -90,7 +90,7 @@ export class UppyWorkflow extends WorkflowEntrypoint<Env, Params> {
 		let osvAlerts: OsvVulnerabilityAlert[] = [];
 		if (config && osvVulnerabilityAlertsEnabled(config)) {
 			osvAlerts = await step.do(
-				"query OSV for npm vulnerabilities",
+				"query-osv-for-npm-vulnerabilities",
 				async () => {
 					const npmEcosystem = ecosystems.find(
 						(eco) => eco.ecosystem === "npm",
@@ -117,14 +117,14 @@ export class UppyWorkflow extends WorkflowEntrypoint<Env, Params> {
 		);
 
 		const updates = await Promise.all([
-			step.do("fetch outdated npm dependencies", async () => {
+			step.do("fetch-outdated-npm-dependencies", async () => {
 				const npmEcosystem = ecosystems.find((eco) => eco.ecosystem === "npm");
 				return await fetchOutdated(
 					npmEcosystem?.files.flatMap((file) => file.dependencies) ?? [],
 					{ minimumReleaseAgeMs: minimumReleaseAge.ms },
 				);
 			}),
-			step.do("fetch outdated mise dependencies", async () => {
+			step.do("fetch-outdated-mise-dependencies", async () => {
 				const miseEcosystem = ecosystems.find(
 					(eco) => eco.ecosystem === "mise",
 				);
@@ -136,14 +136,14 @@ export class UppyWorkflow extends WorkflowEntrypoint<Env, Params> {
 		]);
 		const updatesByEcosystem = { npm: updates[0], mise: updates[1] };
 
-		const safeUpgrades = await step.do("list safe upgrades", async () => {
+		const safeUpgrades = await step.do("list-safe-upgrades", async () => {
 			return listSafeUpgrades(ecosystems, updatesByEcosystem);
 		});
 
 		let safeUpgradesDispatched = 0;
 		if (safeUpgrades.length > 0) {
 			safeUpgradesDispatched = await step.do(
-				"dispatch safe upgrade workflows",
+				"dispatch-safe-upgrade-workflows",
 				async () => {
 					const instances = await this.env.MISE_WORKFLOW.createBatch(
 						safeUpgrades.map((upgrade) => {
@@ -161,7 +161,7 @@ export class UppyWorkflow extends WorkflowEntrypoint<Env, Params> {
 
 		if (config && dependencyDashboardEnabled(config)) {
 			const dashboardMarkdown = await step.do(
-				"render dashboard markdown",
+				"render-dashboard-markdown",
 				async () => {
 					const vulnerabilityAlertsMarkdown =
 						renderVulnerabilityAlerts(vulnerabilityAlerts);
@@ -180,7 +180,7 @@ export class UppyWorkflow extends WorkflowEntrypoint<Env, Params> {
 				},
 			);
 
-			await step.do("sync dependency dashboard issue", async () => {
+			await step.do("sync-dependency-dashboard-issue", async () => {
 				const { octokit } = await repositoryAccessFor(organization, repository);
 				const issues = await octokit.rest.issues.listForRepo({
 					owner: organization,

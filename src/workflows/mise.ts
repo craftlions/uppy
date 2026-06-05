@@ -7,7 +7,7 @@ type Params = { branch?: string };
 export class MiseWorkflow extends WorkflowEntrypoint<Env, Params> {
 	async run(event: WorkflowEvent<Params>, step: WorkflowStep) {
 		// check for closed PR for the branch
-		const closedPRExists = await step.do("check for closed PR", async () => {
+		const closedPRExists = await step.do("check-for-closed-pr", async () => {
 			const access = await repositoryAccessFor("craftlions", "website");
 			const octokit = access.octokit;
 			const { data: prs } = await octokit.rest.pulls.list({
