@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "chrome-devtools": {
+      "command": "aubx",
+      "args": [
+        "chrome-devtools-mcp",
+        "--autoConnect",
+        "--channel=beta"
+      ]
+    }
+  }
+}

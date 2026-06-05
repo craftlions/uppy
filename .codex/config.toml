@@ -1,0 +1,6 @@
+[mcp_servers.chrome-devtools]
+command = "aubx"
+args = [ "chrome-devtools-mcp", "--autoConnect", "--channel=beta",]
+id = ""
+
+[mcp_servers.chrome-devtools.env]

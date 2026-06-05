@@ -1,6 +1,18 @@
 lockfile_version: '1'
-generated_at: '2026-06-05T09:37:26.536883+00:00'
+generated_at: '2026-06-05T11:23:29.959127+00:00'
 dependencies: []
+mcp_servers:
+- chrome-devtools
+mcp_configs:
+  chrome-devtools:
+    name: chrome-devtools
+    transport: stdio
+    args:
+    - chrome-devtools-mcp
+    - --autoConnect
+    - --channel=beta
+    registry: false
+    command: aubx
 local_deployed_files:
 - .claude/rules/cli.md
 - .claude/rules/linting.md

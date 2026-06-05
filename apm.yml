@@ -3,14 +3,18 @@ version: 1.0.0
 description: APM project for uppy
 author: Alexander Niebuhr
 targets:
-  - copilot
-  - claude
-  - codex
-  - gemini
-  - opencode
-
+- copilot
+- claude
+- codex
+- gemini
+- opencode
 dependencies:
   apm: []
-  mcp: []
+  mcp:
+  - name: chrome-devtools
+    registry: false
+    transport: stdio
+    command: aubx
+    args: ["chrome-devtools-mcp", "--autoConnect","--channel=beta"]
 includes: auto
 scripts: {}
