@@ -22,6 +22,7 @@ export const KNOWN_RENOVATE_CONFIG_OPTIONS = [
 	"minimumReleaseAge",
 	"osvVulnerabilityAlerts",
 	"packageRules",
+	"rangeStrategy",
 	"respectLatest",
 	"vulnerabilityAlerts",
 ] as const;
@@ -100,6 +101,15 @@ const RENOVATE_PRESET_CONFIGS: Record<string, RenovateConfig> = {
 	},
 	"config:recommended": {
 		extends: [":dependencyDashboard"],
+	},
+	// https://docs.renovatebot.com/presets-default/#pindevdependencies
+	":pinDevDependencies": {
+		packageRules: [
+			{
+				matchDepTypes: ["devDependencies"],
+				rangeStrategy: "pin",
+			},
+		],
 	},
 	// https://docs.renovatebot.com/presets-security/#securityminimumreleaseagenpm
 	"security:minimumReleaseAgeNpm": {
@@ -276,6 +286,62 @@ const ruleAppliesToNpm = (rule: RenovateConfig): boolean => {
 	}
 	return Array.isArray(datasources) && datasources.includes("npm");
 };
+
+const ruleAppliesToDepType = (
+	rule: RenovateConfig,
+	depType: string,
+): boolean => {
+	const depTypes = rule.matchDepTypes;
+	if (depTypes === undefined) {
+		return true;
+	}
+	return Array.isArray(depTypes) && depTypes.includes(depType);
+};
+
+/**
+ * Resolve the `rangeStrategy` Renovate would apply to a dependency of the given
+ * `depType`, reading the top-level option and any `packageRules` whose
+ * `matchDepTypes`/`matchDatasources` select it (later rules win, mirroring
+ * Renovate). Returns `null` when none is configured — Renovate then defaults to
+ * `"replace"`, which keeps existing ranges as-is.
+ *
+ * @see https://docs.renovatebot.com/configuration-options/#rangestrategy
+ */
+export function effectiveRangeStrategy(
+	config: RenovateConfig,
+	depType: string,
+): string | null {
+	let result =
+		typeof config.rangeStrategy === "string" ? config.rangeStrategy : null;
+
+	const rules = config.packageRules;
+	if (Array.isArray(rules)) {
+		for (const rule of rules) {
+			if (
+				isRecord(rule) &&
+				ruleAppliesToNpm(rule) &&
+				ruleAppliesToDepType(rule, depType) &&
+				typeof rule.rangeStrategy === "string"
+			) {
+				result = rule.rangeStrategy;
+			}
+		}
+	}
+
+	return result;
+}
+
+/**
+ * Whether config asks dependencies of the given `depType` to be pinned, i.e. the
+ * effective {@link effectiveRangeStrategy} resolves to `"pin"`. This is what the
+ * `:pinDevDependencies` preset turns on for `devDependencies`.
+ */
+export function dependencyTypePinned(
+	config: RenovateConfig,
+	depType: string,
+): boolean {
+	return effectiveRangeStrategy(config, depType) === "pin";
+}
 
 /**
  * Determine the configured `minimumReleaseAge` (in milliseconds) that applies to

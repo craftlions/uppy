@@ -6,7 +6,6 @@
 - :rebaseStalePrs -> default for the start
 - :separateMultipleMajorReleases -> decide https://docs.renovatebot.com/configuration-options/#separatemajorminor https://docs.renovatebot.com/configuration-options/#separatemultiplemajor
 - helpers:pinGitHubActionDigests -> support github actions https://docs.renovatebot.com/presets-helpers/#helperspingithubactiondigests
-- :pinDevDependencies -> support pinning https://docs.renovatebot.com/presets-default/#pindevdependencies
 - add dry mode / website mode
 
 ## Stretch Goals
@@ -36,7 +35,6 @@
 "docker:pinDigests", 
 
 ## Code backup
-
 
 // const sandbox = getSandbox(env.Sandbox, sessionId);
 // const sandbox = getSandbox(env.Sandbox, `build-${repoName}-${commit}`);

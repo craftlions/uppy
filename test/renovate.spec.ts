@@ -2,7 +2,9 @@ import type { ContentReader } from "../src/deps.ts";
 import { describe, expect, it, vi } from "vitest";
 import {
 	dependencyDashboardEnabled,
+	dependencyTypePinned,
 	detectRenovateConfig,
+	effectiveRangeStrategy,
 	mergeRenovatePresetConfig,
 	npmMinimumReleaseAgeMs,
 	osvVulnerabilityAlertsEnabled,
@@ -106,6 +108,21 @@ describe("parseRenovateConfig", () => {
 			expect(Array.isArray(result.data.packageRules)).toBe(true);
 			expect(npmMinimumReleaseAgeMs(result.data)).toBe(THREE_DAYS_MS);
 		}
+	});
+
+	it("merges the :pinDevDependencies preset from extends", () => {
+		const result = parseRenovateConfig(
+			"{ extends: [':pinDevDependencies'] }",
+			"renovate.json5",
+		);
+		expect(result).toEqual({
+			ok: true,
+			data: {
+				packageRules: [
+					{ matchDepTypes: ["devDependencies"], rangeStrategy: "pin" },
+				],
+			},
+		});
 	});
 
 	it("merges the security:minimumReleaseAgeNpm preset from extends", () => {
@@ -256,6 +273,76 @@ describe("npmMinimumReleaseAgeMs", () => {
 
 	it("returns null when no minimum release age is configured", () => {
 		expect(npmMinimumReleaseAgeMs({ dependencyDashboard: true })).toBeNull();
+	});
+});
+
+describe("effectiveRangeStrategy", () => {
+	it("returns null when no rangeStrategy is configured", () => {
+		expect(effectiveRangeStrategy({}, "devDependencies")).toBeNull();
+	});
+
+	it("reads the top-level rangeStrategy", () => {
+		expect(
+			effectiveRangeStrategy({ rangeStrategy: "bump" }, "dependencies"),
+		).toBe("bump");
+	});
+
+	it("applies a packageRule only to its matching depType", () => {
+		const config = {
+			packageRules: [
+				{ matchDepTypes: ["devDependencies"], rangeStrategy: "pin" },
+			],
+		};
+		expect(effectiveRangeStrategy(config, "devDependencies")).toBe("pin");
+		expect(effectiveRangeStrategy(config, "dependencies")).toBeNull();
+	});
+
+	it("lets a later matching rule override an earlier one", () => {
+		expect(
+			effectiveRangeStrategy(
+				{
+					rangeStrategy: "replace",
+					packageRules: [
+						{ matchDepTypes: ["devDependencies"], rangeStrategy: "pin" },
+					],
+				},
+				"devDependencies",
+			),
+		).toBe("pin");
+	});
+
+	it("ignores rules that do not target npm", () => {
+		expect(
+			effectiveRangeStrategy(
+				{
+					packageRules: [
+						{ matchDatasources: ["docker"], rangeStrategy: "pin" },
+					],
+				},
+				"dependencies",
+			),
+		).toBeNull();
+	});
+});
+
+describe("dependencyTypePinned", () => {
+	it("is true when the :pinDevDependencies preset targets the depType", () => {
+		const result = parseRenovateConfig(
+			"{ extends: [':pinDevDependencies'] }",
+			"renovate.json5",
+		);
+		expect(result.ok).toBe(true);
+		if (result.ok) {
+			expect(dependencyTypePinned(result.data, "devDependencies")).toBe(true);
+			expect(dependencyTypePinned(result.data, "dependencies")).toBe(false);
+		}
+	});
+
+	it("is false without a pin rangeStrategy", () => {
+		expect(dependencyTypePinned({}, "devDependencies")).toBe(false);
+		expect(
+			dependencyTypePinned({ rangeStrategy: "bump" }, "devDependencies"),
+		).toBe(false);
 	});
 });
 

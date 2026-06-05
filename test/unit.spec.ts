@@ -39,27 +39,49 @@ function mockReader(files: Record<string, string>): {
 describe("parseMiseToml", () => {
 	it("parses tools and normalizes names", () => {
 		expect(parseMiseToml(MISE_TOML)).toEqual([
-			{ name: "aube", version: "1.17.1" },
-			{ name: "node", version: "26.3.0" },
+			{ name: "aube", version: "1.17.1", pinned: true },
+			{ name: "node", version: "26.3.0", pinned: true },
 		]);
 	});
 
 	it("ignores non-tool tables and comments", () => {
 		const toml = `# comment\n[env]\nFOO = "bar"\n[tools]\nnode = "20.0.0"\n`;
-		expect(parseMiseToml(toml)).toEqual([{ name: "node", version: "20.0.0" }]);
+		expect(parseMiseToml(toml)).toEqual([
+			{ name: "node", version: "20.0.0", pinned: true },
+		]);
 	});
 
 	it("extracts the version from an inline table", () => {
 		const toml = `[tools]\nnode = { version = "22.1.0", os = ["linux"] }\n`;
-		expect(parseMiseToml(toml)).toEqual([{ name: "node", version: "22.1.0" }]);
+		expect(parseMiseToml(toml)).toEqual([
+			{ name: "node", version: "22.1.0", pinned: true },
+		]);
+	});
+
+	it("flags a non-exact version as not pinned", () => {
+		const toml = `[tools]\nnode = "latest"\nbun = "1.2"\n`;
+		expect(parseMiseToml(toml)).toEqual([
+			{ name: "node", version: "latest", pinned: false },
+			{ name: "bun", version: "1.2", pinned: false },
+		]);
 	});
 });
 
 describe("parsePackageJson", () => {
-	it("merges dependencies and devDependencies and strips ranges", () => {
+	it("merges dependencies and devDependencies, strips ranges and records pin state", () => {
 		expect(parsePackageJson(PACKAGE_JSON)).toEqual([
-			{ name: "@octokit/core", version: "7.0.6" },
-			{ name: "vitest", version: "4.1.7" },
+			{
+				name: "@octokit/core",
+				version: "7.0.6",
+				pinned: true,
+				depType: "dependencies",
+			},
+			{
+				name: "vitest",
+				version: "4.1.7",
+				pinned: false,
+				depType: "devDependencies",
+			},
 		]);
 	});
 
@@ -94,8 +116,8 @@ describe("detectDependencies", () => {
 					{
 						file: "mise.toml",
 						dependencies: [
-							{ name: "aube", version: "1.17.1" },
-							{ name: "node", version: "26.3.0" },
+							{ name: "aube", version: "1.17.1", pinned: true },
+							{ name: "node", version: "26.3.0", pinned: true },
 						],
 					},
 				],
@@ -106,8 +128,18 @@ describe("detectDependencies", () => {
 					{
 						file: "package.json",
 						dependencies: [
-							{ name: "@octokit/core", version: "7.0.6" },
-							{ name: "vitest", version: "4.1.7" },
+							{
+								name: "@octokit/core",
+								version: "7.0.6",
+								pinned: true,
+								depType: "dependencies",
+							},
+							{
+								name: "vitest",
+								version: "4.1.7",
+								pinned: false,
+								depType: "devDependencies",
+							},
 						],
 					},
 				],
@@ -166,5 +198,84 @@ describe("renderDependencies", () => {
 
 	it("returns an empty string when nothing is detected", () => {
 		expect(renderDependencies([])).toBe("");
+	});
+
+	it("flags unpinned dependencies with a pin action", () => {
+		const markdown = renderDependencies(
+			[
+				{
+					ecosystem: "npm",
+					files: [
+						{
+							file: "package.json",
+							dependencies: [
+								{
+									name: "@octokit/core",
+									version: "7.0.6",
+									pinned: true,
+									depType: "dependencies",
+								},
+								{
+									name: "vitest",
+									version: "4.1.7",
+									pinned: false,
+									depType: "devDependencies",
+								},
+							],
+						},
+					],
+				},
+			],
+			new Map(),
+			new Set(["vitest"]),
+		);
+
+		expect(markdown).toMatchInlineSnapshot(`
+      "## Detected Dependencies
+
+      ### npm (2)
+
+      | Package | Current | Target | Update | Manifest |
+      | --- | --- | --- | --- | --- |
+      | \`@octokit/core\` | \`7.0.6\` | — | ✅ up to date | \`package.json\` |
+      | \`vitest\` | \`4.1.7\` | — | 📌 pin | \`package.json\` |"
+    `);
+	});
+
+	it("appends the pin action to a pending update", () => {
+		const markdown = renderDependencies(
+			[
+				{
+					ecosystem: "npm",
+					files: [
+						{
+							file: "package.json",
+							dependencies: [
+								{
+									name: "vitest",
+									version: "4.1.7",
+									pinned: false,
+									depType: "devDependencies",
+								},
+							],
+						},
+					],
+				},
+			],
+			new Map([
+				[
+					"vitest",
+					{
+						current: "4.1.7",
+						target: "4.2.0",
+						updateType: "minor",
+						state: "safe",
+					},
+				],
+			]),
+			new Set(["vitest"]),
+		);
+
+		expect(markdown).toContain("🟢 minor (safe) 📌 pin");
 	});
 });

@@ -1,6 +1,20 @@
+import { valid } from "semver";
+
 export interface Dependency {
 	name: string;
 	version: string;
+	/**
+	 * Whether the manifest spec is an exact pin (e.g. `1.2.3`) rather than a range
+	 * or constraint (e.g. `^1.2.3`, `latest`, `1.x`). Drives the "pin dependency"
+	 * listing in the dashboard tables.
+	 */
+	pinned?: boolean;
+	/**
+	 * The dependency group this came from, used to match Renovate's
+	 * `matchDepTypes` (e.g. `dependencies`, `devDependencies`). Absent for
+	 * ecosystems without dependency types, such as mise.
+	 */
+	depType?: string;
 }
 
 export interface DependencyFile {
@@ -103,6 +117,15 @@ const normalizeMiseName = (key: string): string => {
 const cleanNpmVersion = (version: string): string =>
 	version.replace(NPM_RANGE_PREFIX, "").trim();
 
+/**
+ * Whether a manifest version spec is an exact pin rather than a range or
+ * constraint. A spec is pinned only when it is a single, fully-qualified semver
+ * version (`1.2.3`, `1.2.3-rc.1`); anything carrying a range operator or
+ * wildcard (`^1.2.3`, `~1.2`, `1.x`, `*`, `latest`) is not.
+ */
+const isPinnedVersion = (version: string): boolean =>
+	valid(version.trim()) !== null;
+
 /** Parse the `[tools]` table of a mise.toml file into dependencies. */
 export function parseMiseToml(content: string): Dependency[] {
 	const deps: Dependency[] = [];
@@ -126,7 +149,7 @@ export function parseMiseToml(content: string): Dependency[] {
 		}
 		const name = normalizeMiseName(unquote(line.slice(0, eq).trim()));
 		const version = extractMiseVersion(line.slice(eq + 1).trim());
-		deps.push({ name, version });
+		deps.push({ name, version, pinned: isPinnedVersion(version) });
 	}
 
 	return deps;
@@ -138,11 +161,22 @@ export function parsePackageJson(content: string): Dependency[] {
 		dependencies?: Record<string, string>;
 		devDependencies?: Record<string, string>;
 	};
-	const all = { ...pkg.dependencies, ...pkg.devDependencies };
-	return Object.entries(all).map(([name, version]) => ({
-		name,
-		version: cleanNpmVersion(version),
-	}));
+	const groups: [string, Record<string, string> | undefined][] = [
+		["dependencies", pkg.dependencies],
+		["devDependencies", pkg.devDependencies],
+	];
+	const deps: Dependency[] = [];
+	for (const [depType, group] of groups) {
+		for (const [name, spec] of Object.entries(group ?? {})) {
+			deps.push({
+				name,
+				version: cleanNpmVersion(spec),
+				pinned: isPinnedVersion(spec),
+				depType,
+			});
+		}
+	}
+	return deps;
 }
 
 /** Read a file from a repository and decode it, or null if it is missing. */
@@ -216,6 +250,7 @@ const countDependencies = (eco: DependencyEcosystem): number =>
 	eco.files.reduce((sum, file) => sum + file.dependencies.length, 0);
 
 const UP_TO_DATE = "✅ up to date";
+const PIN = "📌 pin";
 
 /**
  * Pick the `Target` and `Update` table cells for a dependency given its update
@@ -223,8 +258,26 @@ const UP_TO_DATE = "✅ up to date";
  * four states from {@link UpdateStatus}: a green safe update, a safe update that
  * additionally holds back a newer (still too fresh) version, and an update where
  * every available version is still within the minimum release age window.
+ *
+ * When `needsPin` is set the dependency carries a range the config wants pinned
+ * (see Renovate's `:pinDevDependencies`): a `📌 pin` action is shown on its own
+ * when otherwise up to date, or appended to whatever update is pending.
  */
-function updateCells(status: UpdateStatus | undefined): {
+function updateCells(
+	status: UpdateStatus | undefined,
+	needsPin: boolean,
+): {
+	target: string;
+	update: string;
+} {
+	const cells = updateStatusCells(status);
+	if (needsPin) {
+		cells.update = cells.update === UP_TO_DATE ? PIN : `${cells.update} ${PIN}`;
+	}
+	return cells;
+}
+
+function updateStatusCells(status: UpdateStatus | undefined): {
 	target: string;
 	update: string;
 } {
@@ -270,11 +323,15 @@ function renderPlainSection(eco: DependencyEcosystem): string {
 function renderUpdatableSection(
 	eco: DependencyEcosystem,
 	updates: Map<string, UpdateStatus>,
+	pins: ReadonlySet<string>,
 ): string {
 	const rows = eco.files
 		.flatMap((file) =>
 			file.dependencies.map((dep) => {
-				const { target, update } = updateCells(updates.get(dep.name));
+				const { target, update } = updateCells(
+					updates.get(dep.name),
+					pins.has(dep.name),
+				);
 				return `| \`${dep.name}\` | \`${dep.version}\` | ${target} | ${update} | \`${file.file}\` |`;
 			}),
 		)
@@ -286,11 +343,14 @@ function renderUpdatableSection(
  * Render detected dependencies as a Markdown table per ecosystem. When an
  * `updates` map is supplied, the `npm` and `mise` ecosystems gain
  * `Target`/`Update` columns describing the Renovate-style bump for each
- * outdated dependency.
+ * outdated dependency. Names in `pins` are additionally flagged with a `📌 pin`
+ * action, listing dependencies the config wants pinned but that still carry a
+ * range.
  */
 export function renderDependencies(
 	ecosystems: DependencyEcosystem[],
 	updates?: Map<string, UpdateStatus>,
+	pins: ReadonlySet<string> = new Set(),
 ): string {
 	if (ecosystems.length === 0) {
 		return "";
@@ -298,7 +358,7 @@ export function renderDependencies(
 
 	const sections = ecosystems.map((eco) =>
 		updates && UPDATABLE_ECOSYSTEMS.has(eco.ecosystem)
-			? renderUpdatableSection(eco, updates)
+			? renderUpdatableSection(eco, updates, pins)
 			: renderPlainSection(eco),
 	);
 

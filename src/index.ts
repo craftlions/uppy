@@ -18,6 +18,7 @@ import {
 } from "./outdated.ts";
 import {
 	dependencyDashboardEnabled,
+	dependencyTypePinned,
 	detectRenovateConfig,
 	npmMinimumReleaseAgeMs,
 	osvVulnerabilityAlertsEnabled,
@@ -68,13 +69,11 @@ async function triggerUppyRun({
 		organization,
 		repository,
 	);
-	console.log("Config result:", configResult);
 	const config =
 		configResult.ok && configResult.data !== null
 			? configResult.data.config
 			: undefined;
 	if (!(config && dependencyDashboardEnabled(config))) {
-		console.log("Renovate dependency dashboard is not enabled");
 		return;
 	}
 	const issues = await octokit.rest.issues.listForRepo({
@@ -83,13 +82,11 @@ async function triggerUppyRun({
 		state: "open",
 		creator: "craftlions-uppy[bot]",
 	});
-	console.log("Issues:", issues.data[0]?.id);
 	const ecosystems = await detectDependencies(
 		octokit,
 		organization,
 		repository,
 	);
-	console.log("Ecosystems:", ecosystems);
 	const npm = ecosystems.find((eco) => eco.ecosystem === "npm");
 	const mise = ecosystems.find((eco) => eco.ecosystem === "mise");
 	let vulnerabilityAlertsMarkdown = "";
@@ -100,12 +97,10 @@ async function triggerUppyRun({
 				organization,
 				repository,
 			);
-			console.log("GitHub vulnerability alerts:", alerts);
 			logVulnerabilityAlerts(alerts);
 			vulnerabilityAlertsMarkdown = renderVulnerabilityAlerts(alerts);
-		} catch (cause) {
-			const message = cause instanceof Error ? cause.message : String(cause);
-			console.log(`GitHub vulnerability alert check failed: ${message}`);
+		} catch {
+			// best-effort: leave the alerts section empty on failure
 		}
 	}
 	let osvAlertsMarkdown = "";
@@ -114,12 +109,10 @@ async function triggerUppyRun({
 			const alerts = await fetchOsvVulnerabilityAlerts(
 				npm.files.flatMap((file) => file.dependencies),
 			);
-			console.log("OSV alerts:", alerts);
 			logOsvVulnerabilityAlerts(alerts);
 			osvAlertsMarkdown = renderOsvVulnerabilityAlerts(alerts);
-		} catch (cause) {
-			const message = cause instanceof Error ? cause.message : String(cause);
-			console.log(`OSV vulnerability check failed: ${message}`);
+		} catch {
+			// best-effort: leave the OSV section empty on failure
 		}
 	}
 	const minimumReleaseAge = effectiveMinimumReleaseAge(
@@ -143,7 +136,17 @@ async function triggerUppyRun({
 		npmUpdates || miseUpdates
 			? new Map([...(npmUpdates ?? []), ...(miseUpdates ?? [])])
 			: undefined;
-	const detected = renderDependencies(ecosystems, updates);
+	const pins = new Set<string>();
+	for (const dep of npm?.files.flatMap((file) => file.dependencies) ?? []) {
+		if (
+			dep.pinned === false &&
+			dep.depType !== undefined &&
+			dependencyTypePinned(config, dep.depType)
+		) {
+			pins.add(dep.name);
+		}
+	}
+	const detected = renderDependencies(ecosystems, updates, pins);
 	const dashboardMarkdown = `This issue lists Uppy updates and detected dependencies.\n\nLast updated at ${new Date().toISOString()}${
 		detected ? `\n\n${detected}` : ""
 	}`;
@@ -162,7 +165,6 @@ async function triggerUppyRun({
 			: dashboardMarkdown;
 
 	if (issues.data.length > 0) {
-		console.log("Updating existing issue:", issues.data[0].id);
 		await octokit.rest.issues.update({
 			owner: organization,
 			repo: repository,
@@ -181,10 +183,8 @@ async function triggerUppyRun({
 
 const middleware = createWebMiddleware(app.webhooks);
 
-console.log("Worker initialized");
 export default {
 	async fetch(request) {
-		console.log(`Received request: ${request.method} ${request.url}`);
 		const url = new URL(request.url);
 
 		if (url.pathname === "/api/github/webhooks") {
@@ -216,7 +216,6 @@ export default {
 		}
 		if (request.method === "POST" && url.pathname === "/runs") {
 			const body = await request.json();
-			console.log("Received run trigger for:", body);
 			waitUntil(
 				triggerUppyRun({
 					organization: body.organization,

@@ -61,7 +61,6 @@ export async function fetchOsvVulnerabilityAlerts(
 	}
 
 	const payload = (await response.json()) as OsvQueryBatchResponse;
-	console.log("OSV response payload:", payload);
 	const results = payload.results ?? [];
 	const alerts: OsvVulnerabilityAlert[] = [];
 
