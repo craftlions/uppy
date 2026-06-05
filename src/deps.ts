@@ -247,6 +247,9 @@ function updateCells(status: UpdateStatus | undefined): {
 	return { target: `\`${status.target}\``, update: safe };
 }
 
+/** Ecosystems whose tables gain `Target`/`Update` columns when updates are known. */
+const UPDATABLE_ECOSYSTEMS = new Set(["npm", "mise"]);
+
 /** Render a plain `Package | Version | Manifest` table for an ecosystem. */
 function renderPlainSection(eco: DependencyEcosystem): string {
 	const rows = eco.files
@@ -281,8 +284,9 @@ function renderUpdatableSection(
 
 /**
  * Render detected dependencies as a Markdown table per ecosystem. When an
- * `updates` map is supplied, the `npm` ecosystem gains `Target`/`Update`
- * columns describing the Renovate-style bump for each outdated dependency.
+ * `updates` map is supplied, the `npm` and `mise` ecosystems gain
+ * `Target`/`Update` columns describing the Renovate-style bump for each
+ * outdated dependency.
  */
 export function renderDependencies(
 	ecosystems: DependencyEcosystem[],
@@ -293,7 +297,7 @@ export function renderDependencies(
 	}
 
 	const sections = ecosystems.map((eco) =>
-		updates && eco.ecosystem === "npm"
+		updates && UPDATABLE_ECOSYSTEMS.has(eco.ecosystem)
 			? renderUpdatableSection(eco, updates)
 			: renderPlainSection(eco),
 	);

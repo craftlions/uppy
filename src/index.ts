@@ -5,6 +5,7 @@ import { restEndpointMethods } from "@octokit/plugin-rest-endpoint-methods";
 import { createWebMiddleware } from "@octokit/webhooks";
 import { configResponse } from "./api.ts";
 import { detectDependencies, renderDependencies } from "./deps.ts";
+import { fetchMiseOutdated } from "./mise.ts";
 import {
 	fetchOsvVulnerabilityAlerts,
 	logOsvVulnerabilityAlerts,
@@ -90,6 +91,7 @@ async function triggerUppyRun({
 	);
 	console.log("Ecosystems:", ecosystems);
 	const npm = ecosystems.find((eco) => eco.ecosystem === "npm");
+	const mise = ecosystems.find((eco) => eco.ecosystem === "mise");
 	let vulnerabilityAlertsMarkdown = "";
 	if (config && vulnerabilityAlertsEnabled(config)) {
 		try {
@@ -123,20 +125,32 @@ async function triggerUppyRun({
 	const minimumReleaseAge = effectiveMinimumReleaseAge(
 		npmMinimumReleaseAgeMs(config),
 	);
-	const updates = npm
-		? await fetchOutdated(
-				npm.files.flatMap((file) => file.dependencies),
-				{
-					minimumReleaseAgeMs: minimumReleaseAge.ms,
-				},
-			)
-		: undefined;
+	const [npmUpdates, miseUpdates] = await Promise.all([
+		npm
+			? fetchOutdated(
+					npm.files.flatMap((file) => file.dependencies),
+					{ minimumReleaseAgeMs: minimumReleaseAge.ms },
+				)
+			: undefined,
+		mise
+			? fetchMiseOutdated(
+					mise.files.flatMap((file) => file.dependencies),
+					{ minimumReleaseAgeMs: minimumReleaseAge.ms },
+				)
+			: undefined,
+	]);
+	const updates =
+		npmUpdates || miseUpdates
+			? new Map([...(npmUpdates ?? []), ...(miseUpdates ?? [])])
+			: undefined;
 	const detected = renderDependencies(ecosystems, updates);
 	const dashboardMarkdown = `This issue lists Uppy updates and detected dependencies.\n\nLast updated at ${new Date().toISOString()}${
 		detected ? `\n\n${detected}` : ""
 	}`;
 	const minimumReleaseAgeNote =
-		npm && minimumReleaseAge.forced ? renderMinimumReleaseAgeNote() : "";
+		(npm || mise) && minimumReleaseAge.forced
+			? renderMinimumReleaseAgeNote()
+			: "";
 	const topSections = [
 		minimumReleaseAgeNote,
 		vulnerabilityAlertsMarkdown,

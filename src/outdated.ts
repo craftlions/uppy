@@ -41,7 +41,7 @@ function acceptableUpdates(
 	current: string,
 	versions: string[],
 	latest: string,
-	options: ResolveOptions = {}
+	options: ResolveOptions = {},
 ): string[] {
 	const { ignoreUnstable = true, respectLatest = true } = options;
 
@@ -93,7 +93,7 @@ export function resolveUpdate(
 	current: string,
 	versions: string[],
 	latest: string,
-	options: ResolveOptions = {}
+	options: ResolveOptions = {},
 ): OutdatedInfo | null {
 	const best = acceptableUpdates(current, versions, latest, options).at(-1);
 	if (best === undefined) {
@@ -125,7 +125,7 @@ export interface EffectiveMinimumReleaseAge {
  * value below 3 days (or none at all) is forced up to 3 days.
  */
 export function effectiveMinimumReleaseAge(
-	configuredMs: number | null
+	configuredMs: number | null,
 ): EffectiveMinimumReleaseAge {
 	if (configuredMs === null || configuredMs < THREE_DAYS_MS) {
 		return { ms: THREE_DAYS_MS, forced: true };
@@ -140,7 +140,7 @@ export function effectiveMinimumReleaseAge(
 function isAged(
 	time: string | undefined,
 	now: number,
-	minAgeMs: number
+	minAgeMs: number,
 ): boolean {
 	if (!time) {
 		return false;
@@ -167,7 +167,7 @@ export function resolveUpdateStatus(
 	latest: string,
 	minAgeMs: number,
 	now: number,
-	options: ResolveOptions = {}
+	options: ResolveOptions = {},
 ): UpdateStatus | null {
 	const candidates = acceptableUpdates(current, versions, latest, options);
 	const newest = candidates.at(-1);
@@ -216,7 +216,7 @@ export function resolveUpdateStatus(
  */
 export function renderMinimumReleaseAgeNote(): string {
 	return `> [!NOTE]
-> Uppy enforces a paranoid minimum release age of **3 days** for npm updates before recommending them, to limit exposure to supply-chain attacks on freshly published versions. Newer releases are held back (⏳) until they age past this window.`;
+> Uppy enforces a paranoid minimum release age of **3 days** before recommending updates, to limit exposure to supply-chain attacks on freshly published versions. Newer releases are held back (⏳) until they age past this window.`;
 }
 
 /** Options controlling the registry update check, including the age policy. */
@@ -238,7 +238,7 @@ export interface OutdatedOptions extends ResolveOptions {
  */
 export async function fetchOutdated(
 	dependencies: Dependency[],
-	options: OutdatedOptions = {}
+	options: OutdatedOptions = {},
 ): Promise<Map<string, UpdateStatus>> {
 	const {
 		minimumReleaseAgeMs = THREE_DAYS_MS,
@@ -261,8 +261,8 @@ export async function fetchOutdated(
 
 	const batches = await Promise.all(
 		chunks.map((chunk) =>
-			getVersionsBatch(chunk, { metadata: true, throw: false })
-		)
+			getVersionsBatch(chunk, { metadata: true, throw: false }),
+		),
 	);
 
 	const updates = new Map<string, UpdateStatus>();
@@ -288,7 +288,7 @@ export async function fetchOutdated(
 			latest,
 			minimumReleaseAgeMs,
 			now,
-			resolveOptions
+			resolveOptions,
 		);
 		if (status) {
 			updates.set(entry.name, status);

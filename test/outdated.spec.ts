@@ -19,7 +19,7 @@ const FRESH = "2024-01-09T00:00:00Z"; // 1 day old → too fresh
 describe("resolveUpdate", () => {
 	it("bumps a stable version to the newest stable release", () => {
 		expect(
-			resolveUpdate("1.2.0", ["1.2.0", "1.2.1", "1.3.0"], "1.3.0")
+			resolveUpdate("1.2.0", ["1.2.0", "1.2.1", "1.3.0"], "1.3.0"),
 		).toEqual({ current: "1.2.0", target: "1.3.0", updateType: "minor" });
 	});
 
@@ -38,8 +38,8 @@ describe("resolveUpdate", () => {
 			resolveUpdate(
 				"4.0.0-rc.2",
 				["4.0.0-rc.2", "4.0.0-rc.3", "4.0.0", "4.1.0-alpha.1"],
-				"4.0.0"
-			)
+				"4.0.0",
+			),
 		).toEqual({ current: "4.0.0-rc.2", target: "4.0.0", updateType: "major" });
 	});
 
@@ -48,8 +48,8 @@ describe("resolveUpdate", () => {
 			resolveUpdate(
 				"4.0.0-rc.2",
 				["4.0.0-rc.2", "4.0.0-rc.3", "4.1.0-alpha.1"],
-				"3.9.0"
-			)
+				"3.9.0",
+			),
 		).toEqual({
 			current: "4.0.0-rc.2",
 			target: "4.0.0-rc.3",
@@ -59,7 +59,7 @@ describe("resolveUpdate", () => {
 
 	it("respects the latest dist-tag and does not overshoot it", () => {
 		expect(
-			resolveUpdate("1.0.0", ["1.0.0", "1.1.0", "2.0.0"], "1.1.0")
+			resolveUpdate("1.0.0", ["1.0.0", "1.1.0", "2.0.0"], "1.1.0"),
 		).toEqual({ current: "1.0.0", target: "1.1.0", updateType: "minor" });
 	});
 
@@ -67,7 +67,7 @@ describe("resolveUpdate", () => {
 		expect(
 			resolveUpdate("1.0.0", ["1.0.0", "1.1.0", "2.0.0"], "1.1.0", {
 				respectLatest: false,
-			})
+			}),
 		).toEqual({ current: "1.0.0", target: "2.0.0", updateType: "major" });
 	});
 
@@ -75,7 +75,7 @@ describe("resolveUpdate", () => {
 		expect(
 			resolveUpdate("1.2.0", ["1.2.0", "1.3.0-rc.1"], "1.3.0-rc.1", {
 				ignoreUnstable: false,
-			})
+			}),
 		).toEqual({
 			current: "1.2.0",
 			target: "1.3.0-rc.1",
@@ -121,7 +121,7 @@ describe("resolveUpdateStatus", () => {
 
 	it("returns null when there is no newer version", () => {
 		expect(
-			resolveUpdateStatus("1.0.0", ["1.0.0"], {}, "1.0.0", THREE_DAYS_MS, NOW)
+			resolveUpdateStatus("1.0.0", ["1.0.0"], {}, "1.0.0", THREE_DAYS_MS, NOW),
 		).toBeNull();
 	});
 
@@ -133,8 +133,8 @@ describe("resolveUpdateStatus", () => {
 				times,
 				"1.1.0",
 				THREE_DAYS_MS,
-				NOW
-			)
+				NOW,
+			),
 		).toEqual({
 			current: "1.0.0",
 			target: "1.1.0",
@@ -151,8 +151,8 @@ describe("resolveUpdateStatus", () => {
 				times,
 				"1.2.0",
 				THREE_DAYS_MS,
-				NOW
-			)
+				NOW,
+			),
 		).toEqual({
 			current: "1.0.0",
 			target: "1.1.0",
@@ -170,8 +170,8 @@ describe("resolveUpdateStatus", () => {
 				times,
 				"1.2.0",
 				THREE_DAYS_MS,
-				NOW
-			)
+				NOW,
+			),
 		).toEqual({
 			current: "1.0.0",
 			target: null,
@@ -189,8 +189,8 @@ describe("resolveUpdateStatus", () => {
 				{},
 				"1.1.0",
 				THREE_DAYS_MS,
-				NOW
-			)
+				NOW,
+			),
 		).toEqual({
 			current: "1.0.0",
 			target: null,
@@ -247,12 +247,12 @@ describe("fetchOutdated", () => {
 				{ name: "current-pkg", version: "2.0.0" },
 				{ name: "ghost", version: "1.0.0" },
 			],
-			{ now: NOW }
+			{ now: NOW },
 		);
 
 		expect(getVersionsBatch).toHaveBeenCalledWith(
 			["safe-pkg", "newer-held-pkg", "held-pkg", "current-pkg", "ghost"],
-			{ metadata: true, throw: false }
+			{ metadata: true, throw: false },
 		);
 		expect(Object.fromEntries(updates)).toEqual({
 			"safe-pkg": {
@@ -328,7 +328,7 @@ describe("renderDependencies with updates", () => {
 						heldVersion: "1.1.0",
 					},
 				],
-			])
+			]),
 		);
 
 		expect(markdown).toMatchInlineSnapshot(`
@@ -345,7 +345,7 @@ describe("renderDependencies with updates", () => {
     `);
 	});
 
-	it("leaves non-npm ecosystems as plain tables", () => {
+	it("gives the mise ecosystem Target/Update columns too", () => {
 		const markdown = renderDependencies(
 			[
 				{
@@ -353,12 +353,50 @@ describe("renderDependencies with updates", () => {
 					files: [
 						{
 							file: "mise.toml",
+							dependencies: [
+								{ name: "node", version: "26.3.0" },
+								{ name: "aube", version: "1.16.1" },
+							],
+						},
+					],
+				},
+			],
+			new Map([
+				[
+					"aube",
+					{
+						current: "1.16.1",
+						target: "1.18.0",
+						updateType: "minor",
+						state: "safe",
+					},
+				],
+			]),
+		);
+
+		expect(markdown).toContain(
+			"| Package | Current | Target | Update | Manifest |",
+		);
+		expect(markdown).toContain(
+			"| `aube` | `1.16.1` | `1.18.0` | 🟢 minor (safe) | `mise.toml` |",
+		);
+		expect(markdown).toContain("| `node` | `26.3.0` | — | ✅ up to date |");
+	});
+
+	it("leaves ecosystems without update support as plain tables", () => {
+		const markdown = renderDependencies(
+			[
+				{
+					ecosystem: "docker",
+					files: [
+						{
+							file: "Dockerfile",
 							dependencies: [{ name: "node", version: "26.3.0" }],
 						},
 					],
 				},
 			],
-			new Map()
+			new Map(),
 		);
 
 		expect(markdown).toContain("| Package | Version | Manifest |");
