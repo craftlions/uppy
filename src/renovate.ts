@@ -139,9 +139,11 @@ function mergeConfig(
 	for (const [key, value] of Object.entries(override)) {
 		const current = merged[key];
 		merged[key] =
-			isRecord(current) && isRecord(value)
-				? mergeConfig(current, value)
-				: value;
+			Array.isArray(current) && Array.isArray(value)
+				? [...current, ...value]
+				: isRecord(current) && isRecord(value)
+					? mergeConfig(current, value)
+					: value;
 	}
 	return merged;
 }

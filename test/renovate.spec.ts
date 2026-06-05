@@ -119,6 +119,29 @@ describe("parseRenovateConfig", () => {
 		}
 	});
 
+	it("keeps security:minimumReleaseAgeNpm packageRules when explicit packageRules are configured", () => {
+		const result = parseRenovateConfig(
+			"{ extends: ['security:minimumReleaseAgeNpm'], packageRules: [{ matchPackageNames: ['vitest'], rangeStrategy: 'bump' }] }",
+			"renovate.json5",
+		);
+		expect(result.ok).toBe(true);
+		if (result.ok) {
+			expect(result.data.packageRules).toHaveLength(5);
+			expect(npmMinimumReleaseAgeMs(result.data)).toBe(THREE_DAYS_MS);
+		}
+	});
+
+	it("lets explicit packageRules override security:minimumReleaseAgeNpm packageRules", () => {
+		const result = parseRenovateConfig(
+			"{ extends: ['security:minimumReleaseAgeNpm'], packageRules: [{ matchDatasources: ['npm'], minimumReleaseAge: '7 days' }] }",
+			"renovate.json5",
+		);
+		expect(result.ok).toBe(true);
+		if (result.ok) {
+			expect(npmMinimumReleaseAgeMs(result.data)).toBe(7 * 24 * 60 * 60 * 1000);
+		}
+	});
+
 	it("lets explicit dependencyDashboard config override preset values", () => {
 		const result = parseRenovateConfig(
 			"{ extends: [':dependencyDashboard'], dependencyDashboard: false }",
