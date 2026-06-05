@@ -1,11 +1,11 @@
 lockfile_version: '1'
-generated_at: '2026-06-05T19:58:08.996135+00:00'
+generated_at: '2026-06-05T20:02:51.789626+00:00'
 apm_version: 0.16.1
 dependencies:
 - repo_url: cloudflare/skills
   host: github.com
   resolved_commit: c5b7b06b073fa0b4abbd63964630f97d81da69c4
-  resolved_ref: c5b7b06b073fa0b4abbd63964630f97d81da69c4
+  resolved_ref: main
   package_type: marketplace_plugin
   deployed_files:
   - .agents/skills/agents-sdk

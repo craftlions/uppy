@@ -19,6 +19,6 @@ dependencies:
     - --autoConnect
     - --channel=beta
   apm:
-  - cloudflare/skills#c5b7b06b073fa0b4abbd63964630f97d81da69c4
+  - cloudflare/skills#main
 includes: auto
 scripts: {}
