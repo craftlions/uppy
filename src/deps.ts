@@ -28,6 +28,37 @@ export interface OutdatedInfo {
 }
 
 /**
+ * Whether the recommended update clears the minimum release age window.
+ *
+ * - `safe`: the newest acceptable version is old enough to update to.
+ * - `safe-newer-held`: a safe target exists, but an even newer version is still
+ *   too fresh and is held back until it ages in.
+ * - `held`: every acceptable version is still too fresh; nothing is safe yet.
+ */
+export type UpdateState = "held" | "safe" | "safe-newer-held";
+
+/**
+ * An update check that also accounts for the minimum release age policy.
+ * Dependencies with no available update are omitted from the results entirely
+ * (rendered as "up to date").
+ */
+export interface UpdateStatus {
+	/** The version currently pinned in the manifest. */
+	current: string;
+	/**
+	 * The newest version old enough to recommend, or `null` when no acceptable
+	 * version has aged past the minimum release age yet.
+	 */
+	target: string | null;
+	/** Semver bump type from current to `target` (or to `heldVersion` when held). */
+	updateType: string;
+	/** Whether the update clears the minimum release age window. */
+	state: UpdateState;
+	/** The newest acceptable version that is still too fresh, when one exists. */
+	heldVersion?: string;
+}
+
+/**
  * Minimal Octokit shape required to read file contents. Keeping it narrow makes
  * the function trivial to mock in unit tests while staying compatible with a
  * real Octokit instance.
@@ -186,6 +217,36 @@ const countDependencies = (eco: DependencyEcosystem): number =>
 
 const UP_TO_DATE = "✅ up to date";
 
+/**
+ * Pick the `Target` and `Update` table cells for a dependency given its update
+ * status. Absent status means the dependency is up to date. The icons encode the
+ * four states from {@link UpdateStatus}: a green safe update, a safe update that
+ * additionally holds back a newer (still too fresh) version, and an update where
+ * every available version is still within the minimum release age window.
+ */
+function updateCells(status: UpdateStatus | undefined): {
+	target: string;
+	update: string;
+} {
+	if (!status) {
+		return { target: "—", update: UP_TO_DATE };
+	}
+	if (status.state === "held") {
+		return {
+			target: "—",
+			update: `⏳ ${status.updateType} held (\`${status.heldVersion}\`)`,
+		};
+	}
+	const safe = `🟢 ${status.updateType} (safe)`;
+	if (status.state === "safe-newer-held") {
+		return {
+			target: `\`${status.target}\``,
+			update: `${safe} ⏳ newer held (\`${status.heldVersion}\`)`,
+		};
+	}
+	return { target: `\`${status.target}\``, update: safe };
+}
+
 /** Render a plain `Package | Version | Manifest` table for an ecosystem. */
 function renderPlainSection(eco: DependencyEcosystem): string {
 	const rows = eco.files
@@ -205,15 +266,13 @@ function renderPlainSection(eco: DependencyEcosystem): string {
  */
 function renderUpdatableSection(
 	eco: DependencyEcosystem,
-	updates: Map<string, OutdatedInfo>,
+	updates: Map<string, UpdateStatus>,
 ): string {
 	const rows = eco.files
 		.flatMap((file) =>
 			file.dependencies.map((dep) => {
-				const update = updates.get(dep.name);
-				const target = update ? `\`${update.target}\`` : "—";
-				const kind = update ? update.updateType : UP_TO_DATE;
-				return `| \`${dep.name}\` | \`${dep.version}\` | ${target} | ${kind} | \`${file.file}\` |`;
+				const { target, update } = updateCells(updates.get(dep.name));
+				return `| \`${dep.name}\` | \`${dep.version}\` | ${target} | ${update} | \`${file.file}\` |`;
 			}),
 		)
 		.join("\n");
@@ -227,7 +286,7 @@ function renderUpdatableSection(
  */
 export function renderDependencies(
 	ecosystems: DependencyEcosystem[],
-	updates?: Map<string, OutdatedInfo>,
+	updates?: Map<string, UpdateStatus>,
 ): string {
 	if (ecosystems.length === 0) {
 		return "";

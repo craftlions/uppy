@@ -4,12 +4,16 @@ import {
 	dependencyDashboardEnabled,
 	detectRenovateConfig,
 	mergeRenovatePresetConfig,
+	npmMinimumReleaseAgeMs,
 	osvVulnerabilityAlertsEnabled,
+	parseDurationMs,
 	parseRenovateConfig,
 	RENOVATE_CONFIG_PATHS,
 	unknownRenovateConfigOptions,
 	vulnerabilityAlertsEnabled,
 } from "../src/renovate.ts";
+
+const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
 
 /** Build a mocked Octokit whose getContent serves base64 file fixtures. */
 function mockReader(files: Record<string, string>): {
@@ -91,17 +95,28 @@ describe("parseRenovateConfig", () => {
 		});
 	});
 
-	it("merges nested presets from config:best-practices", () => {
+	it("merges nested presets from config:best-practices, including the npm minimum release age", () => {
 		const result = parseRenovateConfig(
 			"{ extends: ['config:best-practices'] }",
 			"renovate.json5",
 		);
-		expect(result).toEqual({
-			ok: true,
-			data: {
-				dependencyDashboard: true,
-			},
-		});
+		expect(result.ok).toBe(true);
+		if (result.ok) {
+			expect(result.data.dependencyDashboard).toBe(true);
+			expect(Array.isArray(result.data.packageRules)).toBe(true);
+			expect(npmMinimumReleaseAgeMs(result.data)).toBe(THREE_DAYS_MS);
+		}
+	});
+
+	it("merges the security:minimumReleaseAgeNpm preset from extends", () => {
+		const result = parseRenovateConfig(
+			"{ extends: ['security:minimumReleaseAgeNpm'] }",
+			"renovate.json5",
+		);
+		expect(result.ok).toBe(true);
+		if (result.ok) {
+			expect(npmMinimumReleaseAgeMs(result.data)).toBe(THREE_DAYS_MS);
+		}
 	});
 
 	it("lets explicit dependencyDashboard config override preset values", () => {
@@ -165,7 +180,59 @@ describe("unknownRenovateConfigOptions", () => {
 				timezone: "UTC",
 				vulnerabilityAlerts: { enabled: true },
 			}),
-		).toEqual(["packageRules", "timezone"]);
+		).toEqual(["timezone"]);
+	});
+});
+
+describe("parseDurationMs", () => {
+	it("parses Renovate duration strings to milliseconds", () => {
+		expect(parseDurationMs("3 days")).toBe(THREE_DAYS_MS);
+		expect(parseDurationMs("1 day")).toBe(24 * 60 * 60 * 1000);
+		expect(parseDurationMs("12 hours")).toBe(12 * 60 * 60 * 1000);
+		expect(parseDurationMs("2 weeks")).toBe(14 * 24 * 60 * 60 * 1000);
+		expect(parseDurationMs("30 minutes")).toBe(30 * 60 * 1000);
+	});
+
+	it("returns null for unrecognized durations", () => {
+		expect(parseDurationMs("soon")).toBeNull();
+		expect(parseDurationMs("")).toBeNull();
+	});
+});
+
+describe("npmMinimumReleaseAgeMs", () => {
+	it("reads the minimum release age from an npm packageRule", () => {
+		expect(
+			npmMinimumReleaseAgeMs({
+				packageRules: [
+					{ matchDatasources: ["npm"], minimumReleaseAge: "7 days" },
+				],
+			}),
+		).toBe(7 * 24 * 60 * 60 * 1000);
+	});
+
+	it("ignores rules that do not target npm", () => {
+		expect(
+			npmMinimumReleaseAgeMs({
+				packageRules: [
+					{ matchDatasources: ["docker"], minimumReleaseAge: "30 days" },
+				],
+			}),
+		).toBeNull();
+	});
+
+	it("lets a later npm rule override an earlier one", () => {
+		expect(
+			npmMinimumReleaseAgeMs({
+				minimumReleaseAge: "1 day",
+				packageRules: [
+					{ matchDatasources: ["npm"], minimumReleaseAge: "5 days" },
+				],
+			}),
+		).toBe(5 * 24 * 60 * 60 * 1000);
+	});
+
+	it("returns null when no minimum release age is configured", () => {
+		expect(npmMinimumReleaseAgeMs({ dependencyDashboard: true })).toBeNull();
 	});
 });
 

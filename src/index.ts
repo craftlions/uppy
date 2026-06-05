@@ -10,10 +10,15 @@ import {
 	logOsvVulnerabilityAlerts,
 	renderOsvVulnerabilityAlerts,
 } from "./osv.ts";
-import { fetchOutdated } from "./outdated.ts";
+import {
+	effectiveMinimumReleaseAge,
+	fetchOutdated,
+	renderMinimumReleaseAgeNote,
+} from "./outdated.ts";
 import {
 	dependencyDashboardEnabled,
 	detectRenovateConfig,
+	npmMinimumReleaseAgeMs,
 	osvVulnerabilityAlertsEnabled,
 	vulnerabilityAlertsEnabled,
 } from "./renovate.ts";
@@ -115,19 +120,31 @@ async function triggerUppyRun({
 			console.log(`OSV vulnerability check failed: ${message}`);
 		}
 	}
+	const minimumReleaseAge = effectiveMinimumReleaseAge(
+		npmMinimumReleaseAgeMs(config),
+	);
 	const updates = npm
-		? await fetchOutdated(npm.files.flatMap((file) => file.dependencies))
+		? await fetchOutdated(
+				npm.files.flatMap((file) => file.dependencies),
+				{
+					minimumReleaseAgeMs: minimumReleaseAge.ms,
+				},
+			)
 		: undefined;
 	const detected = renderDependencies(ecosystems, updates);
 	const dashboardMarkdown = `This issue lists Uppy updates and detected dependencies.\n\nLast updated at ${new Date().toISOString()}${
 		detected ? `\n\n${detected}` : ""
 	}`;
-	const alertSections = [vulnerabilityAlertsMarkdown, osvAlertsMarkdown].filter(
-		Boolean,
-	);
+	const minimumReleaseAgeNote =
+		npm && minimumReleaseAge.forced ? renderMinimumReleaseAgeNote() : "";
+	const topSections = [
+		minimumReleaseAgeNote,
+		vulnerabilityAlertsMarkdown,
+		osvAlertsMarkdown,
+	].filter(Boolean);
 	const body =
-		alertSections.length > 0
-			? `${alertSections.join("\n\n")}\n\n${dashboardMarkdown}`
+		topSections.length > 0
+			? `${topSections.join("\n\n")}\n\n${dashboardMarkdown}`
 			: dashboardMarkdown;
 
 	if (issues.data.length > 0) {

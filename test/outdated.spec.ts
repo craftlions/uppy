@@ -1,14 +1,25 @@
 import { describe, expect, it, vi } from "vitest";
 import { renderDependencies } from "../src/deps.ts";
-import { fetchOutdated, resolveUpdate } from "../src/outdated.ts";
+import {
+	effectiveMinimumReleaseAge,
+	fetchOutdated,
+	renderMinimumReleaseAgeNote,
+	resolveUpdate,
+	resolveUpdateStatus,
+	THREE_DAYS_MS,
+} from "../src/outdated.ts";
 
 const getVersionsBatch = vi.hoisted(() => vi.fn());
 vi.mock("fast-npm-meta", () => ({ getVersionsBatch }));
 
+const NOW = Date.parse("2024-01-10T00:00:00Z");
+const AGED = "2024-01-01T00:00:00Z"; // 9 days old → safe
+const FRESH = "2024-01-09T00:00:00Z"; // 1 day old → too fresh
+
 describe("resolveUpdate", () => {
 	it("bumps a stable version to the newest stable release", () => {
 		expect(
-			resolveUpdate("1.2.0", ["1.2.0", "1.2.1", "1.3.0"], "1.3.0"),
+			resolveUpdate("1.2.0", ["1.2.0", "1.2.1", "1.3.0"], "1.3.0")
 		).toEqual({ current: "1.2.0", target: "1.3.0", updateType: "minor" });
 	});
 
@@ -27,8 +38,8 @@ describe("resolveUpdate", () => {
 			resolveUpdate(
 				"4.0.0-rc.2",
 				["4.0.0-rc.2", "4.0.0-rc.3", "4.0.0", "4.1.0-alpha.1"],
-				"4.0.0",
-			),
+				"4.0.0"
+			)
 		).toEqual({ current: "4.0.0-rc.2", target: "4.0.0", updateType: "major" });
 	});
 
@@ -37,8 +48,8 @@ describe("resolveUpdate", () => {
 			resolveUpdate(
 				"4.0.0-rc.2",
 				["4.0.0-rc.2", "4.0.0-rc.3", "4.1.0-alpha.1"],
-				"3.9.0",
-			),
+				"3.9.0"
+			)
 		).toEqual({
 			current: "4.0.0-rc.2",
 			target: "4.0.0-rc.3",
@@ -48,7 +59,7 @@ describe("resolveUpdate", () => {
 
 	it("respects the latest dist-tag and does not overshoot it", () => {
 		expect(
-			resolveUpdate("1.0.0", ["1.0.0", "1.1.0", "2.0.0"], "1.1.0"),
+			resolveUpdate("1.0.0", ["1.0.0", "1.1.0", "2.0.0"], "1.1.0")
 		).toEqual({ current: "1.0.0", target: "1.1.0", updateType: "minor" });
 	});
 
@@ -56,7 +67,7 @@ describe("resolveUpdate", () => {
 		expect(
 			resolveUpdate("1.0.0", ["1.0.0", "1.1.0", "2.0.0"], "1.1.0", {
 				respectLatest: false,
-			}),
+			})
 		).toEqual({ current: "1.0.0", target: "2.0.0", updateType: "major" });
 	});
 
@@ -64,7 +75,7 @@ describe("resolveUpdate", () => {
 		expect(
 			resolveUpdate("1.2.0", ["1.2.0", "1.3.0-rc.1"], "1.3.0-rc.1", {
 				ignoreUnstable: false,
-			}),
+			})
 		).toEqual({
 			current: "1.2.0",
 			target: "1.3.0-rc.1",
@@ -77,40 +88,199 @@ describe("resolveUpdate", () => {
 	});
 });
 
+describe("effectiveMinimumReleaseAge", () => {
+	it("forces the 3-day floor when nothing is configured", () => {
+		expect(effectiveMinimumReleaseAge(null)).toEqual({
+			ms: THREE_DAYS_MS,
+			forced: true,
+		});
+	});
+
+	it("forces the 3-day floor when the configured value is below it", () => {
+		expect(effectiveMinimumReleaseAge(24 * 60 * 60 * 1000)).toEqual({
+			ms: THREE_DAYS_MS,
+			forced: true,
+		});
+	});
+
+	it("keeps a configured value that meets or exceeds the floor", () => {
+		expect(effectiveMinimumReleaseAge(THREE_DAYS_MS)).toEqual({
+			ms: THREE_DAYS_MS,
+			forced: false,
+		});
+		const sevenDays = 7 * 24 * 60 * 60 * 1000;
+		expect(effectiveMinimumReleaseAge(sevenDays)).toEqual({
+			ms: sevenDays,
+			forced: false,
+		});
+	});
+});
+
+describe("resolveUpdateStatus", () => {
+	const times = { "1.1.0": AGED, "1.2.0": FRESH };
+
+	it("returns null when there is no newer version", () => {
+		expect(
+			resolveUpdateStatus("1.0.0", ["1.0.0"], {}, "1.0.0", THREE_DAYS_MS, NOW)
+		).toBeNull();
+	});
+
+	it("marks the update safe when the newest version has aged in", () => {
+		expect(
+			resolveUpdateStatus(
+				"1.0.0",
+				["1.0.0", "1.1.0"],
+				times,
+				"1.1.0",
+				THREE_DAYS_MS,
+				NOW
+			)
+		).toEqual({
+			current: "1.0.0",
+			target: "1.1.0",
+			updateType: "minor",
+			state: "safe",
+		});
+	});
+
+	it("holds back a newer version that is still too fresh", () => {
+		expect(
+			resolveUpdateStatus(
+				"1.0.0",
+				["1.0.0", "1.1.0", "1.2.0"],
+				times,
+				"1.2.0",
+				THREE_DAYS_MS,
+				NOW
+			)
+		).toEqual({
+			current: "1.0.0",
+			target: "1.1.0",
+			updateType: "minor",
+			state: "safe-newer-held",
+			heldVersion: "1.2.0",
+		});
+	});
+
+	it("reports held when the only available update is too fresh", () => {
+		expect(
+			resolveUpdateStatus(
+				"1.0.0",
+				["1.0.0", "1.2.0"],
+				times,
+				"1.2.0",
+				THREE_DAYS_MS,
+				NOW
+			)
+		).toEqual({
+			current: "1.0.0",
+			target: null,
+			updateType: "minor",
+			state: "held",
+			heldVersion: "1.2.0",
+		});
+	});
+
+	it("treats an unknown publish time as too fresh (paranoid)", () => {
+		expect(
+			resolveUpdateStatus(
+				"1.0.0",
+				["1.0.0", "1.1.0"],
+				{},
+				"1.1.0",
+				THREE_DAYS_MS,
+				NOW
+			)
+		).toEqual({
+			current: "1.0.0",
+			target: null,
+			updateType: "minor",
+			state: "held",
+			heldVersion: "1.1.0",
+		});
+	});
+});
+
+describe("renderMinimumReleaseAgeNote", () => {
+	it("renders a GitHub note callout linking the discussion", () => {
+		const note = renderMinimumReleaseAgeNote();
+		expect(note).toContain("> [!NOTE]");
+		expect(note).toContain("3 days");
+	});
+});
+
 describe("fetchOutdated", () => {
-	it("maps registry metadata to updates and skips errors and up-to-date deps", async () => {
+	it("requests publish metadata, skips errors, and classifies each update by age", async () => {
 		getVersionsBatch.mockResolvedValueOnce([
 			{
-				name: "vitest",
-				versions: ["4.1.0", "4.1.7"],
-				distTags: { latest: "4.1.7" },
+				name: "safe-pkg",
+				versionsMeta: { "1.0.0": { time: AGED }, "1.1.0": { time: AGED } },
+				distTags: { latest: "1.1.0" },
 			},
 			{
-				name: "@octokit/core",
-				versions: ["7.0.6"],
-				distTags: { latest: "7.0.6" },
+				name: "newer-held-pkg",
+				versionsMeta: {
+					"1.0.0": { time: AGED },
+					"1.1.0": { time: AGED },
+					"1.2.0": { time: FRESH },
+				},
+				distTags: { latest: "1.2.0" },
+			},
+			{
+				name: "held-pkg",
+				versionsMeta: { "1.0.0": { time: AGED }, "1.1.0": { time: FRESH } },
+				distTags: { latest: "1.1.0" },
+			},
+			{
+				name: "current-pkg",
+				versionsMeta: { "2.0.0": { time: AGED } },
+				distTags: { latest: "2.0.0" },
 			},
 			{ name: "ghost", status: 404, error: "Not Found" },
 		]);
 
-		const updates = await fetchOutdated([
-			{ name: "vitest", version: "4.1.0" },
-			{ name: "@octokit/core", version: "7.0.6" },
-			{ name: "ghost", version: "1.0.0" },
-		]);
+		const updates = await fetchOutdated(
+			[
+				{ name: "safe-pkg", version: "1.0.0" },
+				{ name: "newer-held-pkg", version: "1.0.0" },
+				{ name: "held-pkg", version: "1.0.0" },
+				{ name: "current-pkg", version: "2.0.0" },
+				{ name: "ghost", version: "1.0.0" },
+			],
+			{ now: NOW }
+		);
 
 		expect(getVersionsBatch).toHaveBeenCalledWith(
-			["vitest", "@octokit/core", "ghost"],
-			{ throw: false },
+			["safe-pkg", "newer-held-pkg", "held-pkg", "current-pkg", "ghost"],
+			{ metadata: true, throw: false }
 		);
 		expect(Object.fromEntries(updates)).toEqual({
-			vitest: { current: "4.1.0", target: "4.1.7", updateType: "patch" },
+			"safe-pkg": {
+				current: "1.0.0",
+				target: "1.1.0",
+				updateType: "minor",
+				state: "safe",
+			},
+			"newer-held-pkg": {
+				current: "1.0.0",
+				target: "1.1.0",
+				updateType: "minor",
+				state: "safe-newer-held",
+				heldVersion: "1.2.0",
+			},
+			"held-pkg": {
+				current: "1.0.0",
+				target: null,
+				updateType: "minor",
+				state: "held",
+				heldVersion: "1.1.0",
+			},
 		});
 	});
 });
 
 describe("renderDependencies with updates", () => {
-	it("adds Target/Update columns and flags outdated npm deps", () => {
+	it("renders the four minimum-release-age states in the Update column", () => {
 		const markdown = renderDependencies(
 			[
 				{
@@ -119,27 +289,59 @@ describe("renderDependencies with updates", () => {
 						{
 							file: "package.json",
 							dependencies: [
-								{ name: "vitest", version: "4.1.0" },
-								{ name: "@octokit/core", version: "7.0.6" },
+								{ name: "uptodate", version: "1.0.0" },
+								{ name: "safe", version: "1.0.0" },
+								{ name: "newer-held", version: "1.0.0" },
+								{ name: "held", version: "1.0.0" },
 							],
 						},
 					],
 				},
 			],
 			new Map([
-				["vitest", { current: "4.1.0", target: "4.1.7", updateType: "patch" }],
-			]),
+				[
+					"safe",
+					{
+						current: "1.0.0",
+						target: "1.1.0",
+						updateType: "minor",
+						state: "safe",
+					},
+				],
+				[
+					"newer-held",
+					{
+						current: "1.0.0",
+						target: "1.1.0",
+						updateType: "minor",
+						state: "safe-newer-held",
+						heldVersion: "1.2.0",
+					},
+				],
+				[
+					"held",
+					{
+						current: "1.0.0",
+						target: null,
+						updateType: "minor",
+						state: "held",
+						heldVersion: "1.1.0",
+					},
+				],
+			])
 		);
 
 		expect(markdown).toMatchInlineSnapshot(`
       "## Detected Dependencies
 
-      ### npm (2)
+      ### npm (4)
 
       | Package | Current | Target | Update | Manifest |
       | --- | --- | --- | --- | --- |
-      | \`vitest\` | \`4.1.0\` | \`4.1.7\` | patch | \`package.json\` |
-      | \`@octokit/core\` | \`7.0.6\` | — | ✅ up to date | \`package.json\` |"
+      | \`uptodate\` | \`1.0.0\` | — | ✅ up to date | \`package.json\` |
+      | \`safe\` | \`1.0.0\` | \`1.1.0\` | 🟢 minor (safe) | \`package.json\` |
+      | \`newer-held\` | \`1.0.0\` | \`1.1.0\` | 🟢 minor (safe) ⏳ newer held (\`1.2.0\`) | \`package.json\` |
+      | \`held\` | \`1.0.0\` | — | ⏳ minor held (\`1.1.0\`) | \`package.json\` |"
     `);
 	});
 
@@ -156,7 +358,7 @@ describe("renderDependencies with updates", () => {
 					],
 				},
 			],
-			new Map(),
+			new Map()
 		);
 
 		expect(markdown).toContain("| Package | Version | Manifest |");

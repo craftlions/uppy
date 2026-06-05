@@ -37,18 +37,18 @@ describe("configResponse", () => {
 	it("returns config options unknown to the parser", async () => {
 		const octokit = mockReader({
 			"renovate.json5":
-				"{ extends: ['config:recommended'], packageRules: [], timezone: 'UTC' }",
+				"{ extends: ['config:recommended'], customOption: true, timezone: 'UTC' }",
 		});
 		const response = await configResponse(octokit, "acme", "repo");
 		expect(response.status).toBe(200);
 		expect(await response.json()).toEqual({
 			path: "renovate.json5",
 			config: {
+				customOption: true,
 				dependencyDashboard: true,
-				packageRules: [],
 				timezone: "UTC",
 			},
-			unknownOptions: ["packageRules", "timezone"],
+			unknownOptions: ["customOption", "timezone"],
 		});
 	});
 

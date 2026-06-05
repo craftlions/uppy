@@ -19,7 +19,9 @@ export const KNOWN_RENOVATE_CONFIG_OPTIONS = [
 	"dependencyDashboard",
 	"extends",
 	"ignoreUnstable",
+	"minimumReleaseAge",
 	"osvVulnerabilityAlerts",
+	"packageRules",
 	"respectLatest",
 	"vulnerabilityAlerts",
 ] as const;
@@ -94,10 +96,35 @@ const RENOVATE_PRESET_CONFIGS: Record<string, RenovateConfig> = {
 		},
 	},
 	"config:best-practices": {
-		extends: ["config:recommended"],
+		extends: ["config:recommended", "security:minimumReleaseAgeNpm"],
 	},
 	"config:recommended": {
 		extends: [":dependencyDashboard"],
+	},
+	// https://docs.renovatebot.com/presets-security/#securityminimumreleaseagenpm
+	"security:minimumReleaseAgeNpm": {
+		packageRules: [
+			{
+				internalChecksFilter: "strict",
+				matchDatasources: ["npm"],
+				minimumReleaseAge: "3 days",
+			},
+			{
+				matchDatasources: ["npm"],
+				matchUpdateTypes: ["lockFileMaintenance"],
+				minimumReleaseAge: null,
+			},
+			{
+				matchDatasources: ["npm"],
+				matchUpdateTypes: ["replacement"],
+				minimumReleaseAge: null,
+			},
+			{
+				matchDatasources: ["npm"],
+				matchUpdateTypes: ["pin"],
+				minimumReleaseAge: null,
+			},
+		],
 	},
 };
 
@@ -212,6 +239,71 @@ export function osvVulnerabilityAlertsEnabled(config: RenovateConfig): boolean {
 export function vulnerabilityAlertsEnabled(config: RenovateConfig): boolean {
 	const vulnerabilityAlerts = config.vulnerabilityAlerts;
 	return isRecord(vulnerabilityAlerts) && vulnerabilityAlerts.enabled === true;
+}
+
+const MS_PER_MINUTE = 60_000;
+const MS_PER_HOUR = 60 * MS_PER_MINUTE;
+const MS_PER_DAY = 24 * MS_PER_HOUR;
+const DURATION = /^(\d+)\s*(minute|hour|day|week|month|year)s?$/i;
+const DURATION_UNIT_MS: Record<string, number> = {
+	minute: MS_PER_MINUTE,
+	hour: MS_PER_HOUR,
+	day: MS_PER_DAY,
+	week: 7 * MS_PER_DAY,
+	month: 30 * MS_PER_DAY,
+	year: 365 * MS_PER_DAY,
+};
+
+/**
+ * Parse a Renovate duration string such as `"3 days"`, `"12 hours"` or
+ * `"1 week"` into milliseconds. Returns `null` for anything we don't recognize.
+ */
+export function parseDurationMs(text: string): number | null {
+	const match = DURATION.exec(text.trim());
+	if (!match) {
+		return null;
+	}
+	const unit = DURATION_UNIT_MS[match[2].toLowerCase()];
+	return unit === undefined ? null : Number(match[1]) * unit;
+}
+
+const ruleAppliesToNpm = (rule: RenovateConfig): boolean => {
+	const datasources = rule.matchDatasources;
+	if (datasources === undefined) {
+		return true;
+	}
+	return Array.isArray(datasources) && datasources.includes("npm");
+};
+
+/**
+ * Determine the configured `minimumReleaseAge` (in milliseconds) that applies to
+ * npm dependencies, reading both the top-level option and any `packageRules`
+ * (later rules win, mirroring Renovate). Returns `null` when no applicable
+ * minimum release age is configured.
+ */
+export function npmMinimumReleaseAgeMs(config: RenovateConfig): number | null {
+	let result =
+		typeof config.minimumReleaseAge === "string"
+			? parseDurationMs(config.minimumReleaseAge)
+			: null;
+
+	const rules = config.packageRules;
+	if (Array.isArray(rules)) {
+		for (const rule of rules) {
+			if (
+				isRecord(rule) &&
+				ruleAppliesToNpm(rule) &&
+				typeof rule.minimumReleaseAge === "string"
+			) {
+				const ms = parseDurationMs(rule.minimumReleaseAge);
+				if (ms !== null) {
+					result = ms;
+				}
+			}
+		}
+	}
+
+	return result;
 }
 
 /**
