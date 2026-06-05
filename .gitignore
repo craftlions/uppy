@@ -9,3 +9,13 @@ coverage
 
 # APM dependencies
 apm_modules/
+
+# .agents
+# .claude
+# .codex
+# .gemini
+# .github
+# .opencode
+# opencode.json
+# .vscode/mcp.json
+# .mcp.json
