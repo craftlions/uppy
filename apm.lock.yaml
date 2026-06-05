@@ -1,8 +1,14 @@
 lockfile_version: '1'
-generated_at: '2026-06-05T11:23:29.959127+00:00'
+generated_at: '2026-06-05T18:46:23.973761+00:00'
+apm_version: 0.16.1
 dependencies: []
 mcp_servers:
 - chrome-devtools
+- cloudflare-api
+- cloudflare-bindings
+- cloudflare-builds
+- cloudflare-docs
+- cloudflare-observability
 mcp_configs:
   chrome-devtools:
     name: chrome-devtools
@@ -13,6 +19,31 @@ mcp_configs:
     - --channel=beta
     registry: false
     command: aubx
+  cloudflare-api:
+    name: cloudflare-api
+    transport: http
+    registry: false
+    url: https://mcp.cloudflare.com/mcp
+  cloudflare-bindings:
+    name: cloudflare-bindings
+    transport: http
+    registry: false
+    url: https://bindings.mcp.cloudflare.com/mcp
+  cloudflare-builds:
+    name: cloudflare-builds
+    transport: http
+    registry: false
+    url: https://builds.mcp.cloudflare.com/mcp
+  cloudflare-docs:
+    name: cloudflare-docs
+    transport: http
+    registry: false
+    url: https://docs.mcp.cloudflare.com/mcp
+  cloudflare-observability:
+    name: cloudflare-observability
+    transport: http
+    registry: false
+    url: https://observability.mcp.cloudflare.com/mcp
 local_deployed_files:
 - .claude/rules/cli.md
 - .claude/rules/linting.md

@@ -1,40 +1,10 @@
-import { env, waitUntil } from "cloudflare:workers";
+import { env } from "cloudflare:workers";
 import { App } from "@octokit/app";
 import { Octokit } from "@octokit/core";
 import { restEndpointMethods } from "@octokit/plugin-rest-endpoint-methods";
 import { createWebMiddleware } from "@octokit/webhooks";
+import { customAlphabet } from "nanoid";
 import { configResponse } from "./api.ts";
-import {
-	detectDependencies,
-	listSafeUpgrades,
-	renderDependencies,
-} from "./deps.ts";
-import { fetchMiseOutdated } from "./mise.ts";
-import {
-	fetchOsvVulnerabilityAlerts,
-	logOsvVulnerabilityAlerts,
-	renderOsvVulnerabilityAlerts,
-} from "./osv.ts";
-import {
-	effectiveMinimumReleaseAge,
-	fetchOutdated,
-	renderMinimumReleaseAgeNote,
-} from "./outdated.ts";
-import {
-	dependencyDashboardEnabled,
-	dependencyTypePinned,
-	detectRenovateConfig,
-	npmMinimumReleaseAgeMs,
-	osvVulnerabilityAlertsEnabled,
-	vulnerabilityAlertsEnabled,
-} from "./renovate.ts";
-import {
-	fetchVulnerabilityAlerts,
-	logVulnerabilityAlerts,
-	renderVulnerabilityAlerts,
-} from "./vulnerability-alerts.ts";
-
-export { Sandbox } from "@cloudflare/sandbox";
 
 const app = new App({
 	appId: env.GITHUB_APP_ID,
@@ -53,140 +23,36 @@ app.webhooks.on("pull_request.closed", async ({ id, name }) => {
 	console.log(`Received event ${name} with id ${id}`);
 });
 
-/** Resolve an installation-scoped Octokit for the app's install on a repo. */
-async function installationOctokitFor(owner: string, repo: string) {
+interface RepositoryAccess {
+	defaultBranch: string;
+	htmlUrl: string;
+	installationId: number;
+	octokit: Awaited<ReturnType<typeof app.getInstallationOctokit>>;
+}
+
+/** Resolve installation-scoped repository access for the app's install. */
+export async function repositoryAccessFor(
+	owner: string,
+	repo: string,
+): Promise<RepositoryAccess> {
 	const { data: installation } =
 		await app.octokit.rest.apps.getRepoInstallation({ owner, repo });
-	return app.getInstallationOctokit(installation.id);
+	const octokit = await app.getInstallationOctokit(installation.id);
+	const { data: repository } = await octokit.rest.repos.get({ owner, repo });
+	return {
+		defaultBranch: repository.default_branch,
+		htmlUrl: repository.html_url,
+		installationId: installation.id,
+		octokit,
+	};
 }
 
-async function triggerUppyRun({
-	organization,
-	repository,
-}: {
-	organization: string;
-	repository: string;
-}) {
-	const octokit = await installationOctokitFor(organization, repository);
-	const configResult = await detectRenovateConfig(
-		octokit,
-		organization,
-		repository,
-	);
-	const config =
-		configResult.ok && configResult.data !== null
-			? configResult.data.config
-			: undefined;
-	if (!(config && dependencyDashboardEnabled(config))) {
-		return;
-	}
-	const issues = await octokit.rest.issues.listForRepo({
-		owner: organization,
-		repo: repository,
-		state: "open",
-		creator: "craftlions-uppy[bot]",
-	});
-	const ecosystems = await detectDependencies(
-		octokit,
-		organization,
-		repository,
-	);
-	const npm = ecosystems.find((eco) => eco.ecosystem === "npm");
-	const mise = ecosystems.find((eco) => eco.ecosystem === "mise");
-	let vulnerabilityAlertsMarkdown = "";
-	if (config && vulnerabilityAlertsEnabled(config)) {
-		try {
-			const alerts = await fetchVulnerabilityAlerts(
-				octokit,
-				organization,
-				repository,
-			);
-			logVulnerabilityAlerts(alerts);
-			vulnerabilityAlertsMarkdown = renderVulnerabilityAlerts(alerts);
-		} catch {
-			// best-effort: leave the alerts section empty on failure
-		}
-	}
-	let osvAlertsMarkdown = "";
-	if (npm && config && osvVulnerabilityAlertsEnabled(config)) {
-		try {
-			const alerts = await fetchOsvVulnerabilityAlerts(
-				npm.files.flatMap((file) => file.dependencies),
-			);
-			logOsvVulnerabilityAlerts(alerts);
-			osvAlertsMarkdown = renderOsvVulnerabilityAlerts(alerts);
-		} catch {
-			// best-effort: leave the OSV section empty on failure
-		}
-	}
-	const minimumReleaseAge = effectiveMinimumReleaseAge(
-		npmMinimumReleaseAgeMs(config),
-	);
-	const [npmUpdates, miseUpdates] = await Promise.all([
-		npm
-			? fetchOutdated(
-					npm.files.flatMap((file) => file.dependencies),
-					{ minimumReleaseAgeMs: minimumReleaseAge.ms },
-				)
-			: undefined,
-		mise
-			? fetchMiseOutdated(
-					mise.files.flatMap((file) => file.dependencies),
-					{ minimumReleaseAgeMs: minimumReleaseAge.ms },
-				)
-			: undefined,
-	]);
-	const updates =
-		npmUpdates || miseUpdates
-			? new Map([...(npmUpdates ?? []), ...(miseUpdates ?? [])])
-			: undefined;
-	const pins = new Set<string>();
-	for (const dep of npm?.files.flatMap((file) => file.dependencies) ?? []) {
-		if (
-			dep.pinned === false &&
-			dep.depType !== undefined &&
-			dependencyTypePinned(config, dep.depType)
-		) {
-			pins.add(dep.name);
-		}
-	}
-	const detected = renderDependencies(ecosystems, updates, pins);
-	const dashboardMarkdown = `This issue lists Uppy updates and detected dependencies.\n\nLast updated at ${new Date().toISOString()}${
-		detected ? `\n\n${detected}` : ""
-	}`;
-	const minimumReleaseAgeNote =
-		(npm || mise) && minimumReleaseAge.forced
-			? renderMinimumReleaseAgeNote()
-			: "";
-	const topSections = [
-		minimumReleaseAgeNote,
-		vulnerabilityAlertsMarkdown,
-		osvAlertsMarkdown,
-	].filter(Boolean);
-	const body =
-		topSections.length > 0
-			? `${topSections.join("\n\n")}\n\n${dashboardMarkdown}`
-			: dashboardMarkdown;
-
-	if (issues.data.length > 0) {
-		await octokit.rest.issues.update({
-			owner: organization,
-			repo: repository,
-			issue_number: issues.data[0].number,
-			body,
-		});
-	} else {
-		await octokit.rest.issues.create({
-			owner: organization,
-			repo: repository,
-			title: "Uppy Dashboard",
-			body,
-		});
-	}
-	console.log("Safe upgrades", listSafeUpgrades(ecosystems, updates));
-}
+export const nanoid = customAlphabet("abcdefghijklmnopqrstuvwxyz0123456789", 6);
 
 const middleware = createWebMiddleware(app.webhooks);
+
+export { MiseWorkflow } from "./workflows/mise.ts";
+export { UppyWorkflow } from "./workflows/uppy.ts";
 
 export default {
 	async fetch(request) {
@@ -207,7 +73,7 @@ export default {
 				);
 			}
 			try {
-				const octokit = await installationOctokitFor(organization, repository);
+				const { octokit } = await repositoryAccessFor(organization, repository);
 				return await configResponse(octokit, organization, repository);
 			} catch (cause) {
 				const message = cause instanceof Error ? cause.message : String(cause);
@@ -220,15 +86,16 @@ export default {
 			}
 		}
 		if (request.method === "POST" && url.pathname === "/runs") {
-			const body = await request.json();
-			waitUntil(
-				triggerUppyRun({
+			const body = await request.json(); // TODO add zod v4 safeParseAsync validation
+			await env.UPPY_WORKFLOW.create({
+				id: `${body.organization}-${body.repository}-${nanoid()}`,
+				params: {
 					organization: body.organization,
 					repository: body.repository,
-				}),
-			);
+				},
+			});
 
-			return new Response("OK", { status: 200 });
+			return new Response("Created", { status: 201 });
 		}
 
 		return new Response("Not Found", { status: 404 });

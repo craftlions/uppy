@@ -12,7 +12,7 @@ ENV MISE_INSTALL_PATH="/usr/local/bin/mise"
 ENV MISE_VERSION="2026.5.16"
 
 RUN curl https://mise.run | sh
-RUN mise install --system aube@1.16.1
+RUN mise install --system aube@latest node@latest
 
 RUN mkdir -p /workspace
 

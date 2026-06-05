@@ -23,40 +23,23 @@
   "workers_dev": true,
   "preview_urls": false,
   "limits": {
-    "cpu_ms": 5000
+    "cpu_ms": 300000
   },
   "upload_source_maps": true,
   "vars": {
-    "SANDBOX_TRANSPORT": "rpc",
+    // "SANDBOX_TRANSPORT": "rpc",
     "GITHUB_APP_ID": "3924701"
   },
-  // "artifacts": [
-  //   {
-  //     "binding": "ARTIFACTS",
-  //     "namespace": "craftlions",
-  //     "remote": true
-  //   }
-  // ]
-  "containers": [
+  "workflows": [
     {
-      "class_name": "Sandbox",
-      "image": "./Dockerfile",
-      "instance_type": "basic",
-      "max_instances": 2000
-    }
-  ],
-  "durable_objects": {
-    "bindings": [
-      {
-        "class_name": "Sandbox",
-        "name": "Sandbox"
-      }
-    ]
-  },
-  "migrations": [
+      "name": "uppy",
+      "binding": "UPPY_WORKFLOW",
+      "class_name": "UppyWorkflow"
+    },
     {
-      "new_sqlite_classes": ["Sandbox"],
-      "tag": "v1"
+      "name": "uppy-mise",
+      "binding": "MISE_WORKFLOW",
+      "class_name": "MiseWorkflow"
     }
   ]
 }

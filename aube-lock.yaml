@@ -19,6 +19,7 @@ time:
   '@vitest/snapshot@4.1.7': 2026-05-20T07:19:26.917Z
   '@vitest/ui@4.1.8': 2026-06-01T08:15:13.391Z
   fast-npm-meta@2.0.0: 2026-05-25T02:52:29.048Z
+  nanoid@5.1.11: 2026-04-30T22:06:42.984Z
   vite@8.0.14: 2026-05-21T07:16:03.179Z
   wrangler@4.95.0: 2026-05-26T15:52:58.620Z
   yaml@2.9.0: 2026-05-11T10:16:24.045Z
@@ -66,6 +67,9 @@ importers:
       fast-npm-meta:
         specifier: 2.0.0
         version: 2.0.0
+      nanoid:
+        specifier: 5.1.11
+        version: 5.1.11
       semver:
         specifier: 7.8.1
         version: 7.8.1
@@ -1028,6 +1032,11 @@ packages:
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
     hasBin: true
 
+  nanoid@5.1.11:
+    resolution: {integrity: sha512-v+KEsUv2ps74PaSKv0gHTxTCgMXOIfBEbaqa6w6ISIGC7ZsvHN4N9oJ8d4cmf0n5oTzQz2SLmThbQWhjd/8eKg==}
+    engines: {node: ^18 || >=20}
+    hasBin: true
+
   node-releases@2.0.46:
     resolution: {integrity: sha512-GYVXHE2KnrzAfsAjl4uP++evGFCrAU1jta4ubEjIG7YWt/64Gqv66a30yKwWczVjA6j3bM4nBwH7Pk1JmDHaxQ==}
     engines: {node: '>=18'}
@@ -1971,6 +1980,8 @@ snapshots:
   ms@2.1.3: {}
 
   nanoid@3.3.12: {}
+
+  nanoid@5.1.11: {}
 
   node-releases@2.0.46: {}
 

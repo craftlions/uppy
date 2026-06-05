@@ -79,6 +79,7 @@ export interface SafeUpgrade {
 	current: string;
 	target: string;
 	updateType: string;
+	depType?: string;
 }
 
 /**
@@ -358,7 +359,7 @@ function renderUpdatableSection(
  */
 export function renderDependencies(
 	ecosystems: DependencyEcosystem[],
-	updates?: Map<string, UpdateStatus>,
+	updates?: Map<string, UpdateStatus>[],
 	pins: ReadonlySet<string> = new Set(),
 ): string {
 	if (ecosystems.length === 0) {
@@ -367,7 +368,9 @@ export function renderDependencies(
 
 	const sections = ecosystems.map((eco) =>
 		updates && UPDATABLE_ECOSYSTEMS.has(eco.ecosystem)
-			? renderUpdatableSection(eco, updates, pins)
+			? updates
+					.map((update) => renderUpdatableSection(eco, update, pins))
+					.join("\n\n")
 			: renderPlainSection(eco),
 	);
 
@@ -396,6 +399,7 @@ export function listSafeUpgrades(
 						current: status.current,
 						target: status.target,
 						updateType: status.updateType,
+						depType: dep.depType,
 					});
 				}
 			}

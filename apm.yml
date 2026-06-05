@@ -9,12 +9,16 @@ targets:
 - gemini
 - opencode
 dependencies:
-  apm: []
   mcp:
   - name: chrome-devtools
     registry: false
     transport: stdio
     command: aubx
-    args: ["chrome-devtools-mcp", "--autoConnect","--channel=beta"]
+    args:
+    - chrome-devtools-mcp
+    - --autoConnect
+    - --channel=beta
+  # apm:
+  # - cloudflare/skills
 includes: auto
 scripts: {}
