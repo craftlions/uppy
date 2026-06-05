@@ -40,6 +40,45 @@ url = "https://github.com/endevco/aube/releases/download/v1.18.0/aube-v1.18.0-x8
 url_api = "https://api.github.com/repos/endevco/aube/releases/assets/438529280"
 provenance = "github-attestations"
 
+[[tools."github:microsoft/apm"]]
+version = "0.18.0"
+backend = "github:microsoft/apm"
+
+[tools."github:microsoft/apm"."platforms.linux-arm64"]
+checksum = "sha256:dee91b530ec2a28832cd52dda3c303ba3647c726b2caf90f2f53118c4a79e993"
+url = "https://github.com/microsoft/apm/releases/download/v0.18.0/apm-linux-arm64.tar.gz"
+url_api = "https://api.github.com/repos/microsoft/apm/releases/assets/438411429"
+
+[tools."github:microsoft/apm"."platforms.linux-arm64-musl"]
+checksum = "sha256:dee91b530ec2a28832cd52dda3c303ba3647c726b2caf90f2f53118c4a79e993"
+url = "https://github.com/microsoft/apm/releases/download/v0.18.0/apm-linux-arm64.tar.gz"
+url_api = "https://api.github.com/repos/microsoft/apm/releases/assets/438411429"
+
+[tools."github:microsoft/apm"."platforms.linux-x64"]
+checksum = "sha256:9724f09627243bd5a1aeb7cb07616469718e36d20dd4430d0e6ee5a3046ab09a"
+url = "https://github.com/microsoft/apm/releases/download/v0.18.0/apm-linux-x86_64.tar.gz"
+url_api = "https://api.github.com/repos/microsoft/apm/releases/assets/438411430"
+
+[tools."github:microsoft/apm"."platforms.linux-x64-musl"]
+checksum = "sha256:9724f09627243bd5a1aeb7cb07616469718e36d20dd4430d0e6ee5a3046ab09a"
+url = "https://github.com/microsoft/apm/releases/download/v0.18.0/apm-linux-x86_64.tar.gz"
+url_api = "https://api.github.com/repos/microsoft/apm/releases/assets/438411430"
+
+[tools."github:microsoft/apm"."platforms.macos-arm64"]
+checksum = "sha256:6a22511e16559e54d96fcc11fb8599dc5c2ffb79cff136560a4d46d45b4cd099"
+url = "https://github.com/microsoft/apm/releases/download/v0.18.0/apm-darwin-arm64.tar.gz"
+url_api = "https://api.github.com/repos/microsoft/apm/releases/assets/438411431"
+
+[tools."github:microsoft/apm"."platforms.macos-x64"]
+checksum = "sha256:e2702a163182f771d81927371f5978bfe3ca051a8d7509db35c0814513636b58"
+url = "https://github.com/microsoft/apm/releases/download/v0.18.0/apm-darwin-x86_64.tar.gz"
+url_api = "https://api.github.com/repos/microsoft/apm/releases/assets/438411428"
+
+[tools."github:microsoft/apm"."platforms.windows-x64"]
+checksum = "sha256:713fcf1613fc190a01485ddbc5cd07aee8cfd942e87e04489e989ee0a4691e5e"
+url = "https://github.com/microsoft/apm/releases/download/v0.18.0/apm-windows-x86_64.zip"
+url_api = "https://api.github.com/repos/microsoft/apm/releases/assets/438411427"
+
 [[tools.node]]
 version = "26.3.0"
 backend = "core:node"
