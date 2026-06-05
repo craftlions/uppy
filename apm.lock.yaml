@@ -1,0 +1,9 @@
+lockfile_version: '1'
+generated_at: '2026-06-05T09:37:26.536883+00:00'
+dependencies: []
+local_deployed_files:
+- .claude/rules/default.md
+- .github/instructions/default.instructions.md
+local_deployed_file_hashes:
+  .claude/rules/default.md: sha256:d2fe1f4ca8c0fb3b77db0675e5f27f9a995fc9c5a4cbe78147b10fd3aebe11b3
+  .github/instructions/default.instructions.md: sha256:b5c7a254fb3873cea9fbe25732647a8b039d176de2fb3af152b772651326fbe8

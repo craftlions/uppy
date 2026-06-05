@@ -18,3 +18,4 @@ apm audit --ci
 
 aubx rosie-skills install HugoRCD/evlog -a claude -a warp --ref --skill analyze-logs --verbose
 aubx skills@latest add mattpocock/skills
+apm install mattpocock/skills --dry-run -v
