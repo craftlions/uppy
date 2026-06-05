@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
 	type ContentReader,
 	detectDependencies,
+	listSafeUpgrades,
 	parseMiseToml,
 	parsePackageJson,
 	renderDependencies,
@@ -277,5 +278,88 @@ describe("renderDependencies", () => {
 		);
 
 		expect(markdown).toContain("🟢 minor (safe) 📌 pin");
+	});
+});
+
+describe("listSafeUpgrades", () => {
+	it("returns safe upgrades across ecosystems and skips held updates", () => {
+		const upgrades = listSafeUpgrades(
+			[
+				{
+					ecosystem: "mise",
+					files: [
+						{
+							file: "mise.toml",
+							dependencies: [
+								{ name: "aube", version: "1.17.1" },
+								{ name: "node", version: "26.3.0" },
+							],
+						},
+					],
+				},
+				{
+					ecosystem: "npm",
+					files: [
+						{
+							file: "package.json",
+							dependencies: [
+								{ name: "@octokit/core", version: "7.0.6" },
+								{ name: "vitest", version: "4.1.7" },
+							],
+						},
+					],
+				},
+			],
+			new Map([
+				[
+					"aube",
+					{
+						current: "1.17.1",
+						target: "1.18.0",
+						updateType: "minor",
+						state: "safe",
+					},
+				],
+				[
+					"node",
+					{
+						current: "26.3.0",
+						target: null,
+						updateType: "minor",
+						state: "held",
+						heldVersion: "26.4.0",
+					},
+				],
+				[
+					"vitest",
+					{
+						current: "4.1.7",
+						target: "4.1.8",
+						updateType: "patch",
+						state: "safe-newer-held",
+						heldVersion: "4.2.0",
+					},
+				],
+			]),
+		);
+
+		expect(upgrades).toEqual([
+			{
+				ecosystem: "mise",
+				manifest: "mise.toml",
+				package: "aube",
+				current: "1.17.1",
+				target: "1.18.0",
+				updateType: "minor",
+			},
+			{
+				ecosystem: "npm",
+				manifest: "package.json",
+				package: "vitest",
+				current: "4.1.7",
+				target: "4.1.8",
+				updateType: "patch",
+			},
+		]);
 	});
 });

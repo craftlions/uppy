@@ -72,6 +72,15 @@ export interface UpdateStatus {
 	heldVersion?: string;
 }
 
+export interface SafeUpgrade {
+	ecosystem: string;
+	manifest: string;
+	package: string;
+	current: string;
+	target: string;
+	updateType: string;
+}
+
 /**
  * Minimal Octokit shape required to read file contents. Keeping it narrow makes
  * the function trivial to mock in unit tests while staying compatible with a
@@ -363,4 +372,34 @@ export function renderDependencies(
 	);
 
 	return `## Detected Dependencies\n\n${sections.join("\n\n")}`;
+}
+
+/** List every dependency whose resolved target has aged into a safe update. */
+export function listSafeUpgrades(
+	ecosystems: DependencyEcosystem[],
+	updates?: ReadonlyMap<string, UpdateStatus>,
+): SafeUpgrade[] {
+	if (!updates) {
+		return [];
+	}
+
+	const upgrades: SafeUpgrade[] = [];
+	for (const eco of ecosystems) {
+		for (const file of eco.files) {
+			for (const dep of file.dependencies) {
+				const status = updates.get(dep.name);
+				if (status?.target) {
+					upgrades.push({
+						ecosystem: eco.ecosystem,
+						manifest: file.file,
+						package: dep.name,
+						current: status.current,
+						target: status.target,
+						updateType: status.updateType,
+					});
+				}
+			}
+		}
+	}
+	return upgrades;
 }

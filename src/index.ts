@@ -4,7 +4,11 @@ import { Octokit } from "@octokit/core";
 import { restEndpointMethods } from "@octokit/plugin-rest-endpoint-methods";
 import { createWebMiddleware } from "@octokit/webhooks";
 import { configResponse } from "./api.ts";
-import { detectDependencies, renderDependencies } from "./deps.ts";
+import {
+	detectDependencies,
+	listSafeUpgrades,
+	renderDependencies,
+} from "./deps.ts";
 import { fetchMiseOutdated } from "./mise.ts";
 import {
 	fetchOsvVulnerabilityAlerts,
@@ -179,6 +183,7 @@ async function triggerUppyRun({
 			body,
 		});
 	}
+	console.log("Safe upgrades", listSafeUpgrades(ecosystems, updates));
 }
 
 const middleware = createWebMiddleware(app.webhooks);
