@@ -2,8 +2,16 @@ lockfile_version: '1'
 generated_at: '2026-06-05T09:37:26.536883+00:00'
 dependencies: []
 local_deployed_files:
-- .claude/rules/default.md
-- .github/instructions/default.instructions.md
+- .claude/rules/cli.md
+- .claude/rules/linting.md
+- .claude/rules/tests.md
+- .github/instructions/cli.instructions.md
+- .github/instructions/linting.instructions.md
+- .github/instructions/tests.instructions.md
 local_deployed_file_hashes:
-  .claude/rules/default.md: sha256:d2fe1f4ca8c0fb3b77db0675e5f27f9a995fc9c5a4cbe78147b10fd3aebe11b3
-  .github/instructions/default.instructions.md: sha256:b5c7a254fb3873cea9fbe25732647a8b039d176de2fb3af152b772651326fbe8
+  .claude/rules/cli.md: sha256:804da5398b0d63f18062a1d4ee4698669d49b26e5e2bdea0a66781950d27f182
+  .claude/rules/linting.md: sha256:07ec091c84a154a8d3a9e5e1cc07b33dc779bd0be865b160e14c04dd3f4a19bb
+  .claude/rules/tests.md: sha256:5d71f37e510961a1274f57ab9c4beaba907d0b346feb51bcf14f0515853471d0
+  .github/instructions/cli.instructions.md: sha256:7414e3f94b47543929dcb84e96827fa1f129002073b72d1d006c7a2b6f36f9f4
+  .github/instructions/linting.instructions.md: sha256:4a44678b25d10f3685fb1660184753432281ad9e1692826cd8776438bd741614
+  .github/instructions/tests.instructions.md: sha256:30680630fd88fb6ded7b0d157b1c2cdca9aed5350f4e756e50b5913bdeabf0f6
