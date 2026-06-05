@@ -7,7 +7,21 @@
     "defaultBranch": "main"
   },
   "files": {
-    "includes": ["**", "!**/worker-configuration.d.ts", "!**/drizzle"]
+    "includes": [
+      "**",
+      "!**/worker-configuration.d.ts",
+      "!**/drizzle",
+      "!.agents",
+      "!.apm",
+      "!.claude",
+      "!.codex",
+      "!.gemini",
+      "!.github",
+      "!.opencode",
+      "!opencode.json",
+      "!.vscode",
+      "!.mcp.json"
+    ]
   },
   "formatter": {
     "enabled": true

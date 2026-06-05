@@ -227,7 +227,7 @@ describe("renderDependencies", () => {
 					],
 				},
 			],
-			new Map(),
+			{},
 			new Set(["vitest"]),
 		);
 
@@ -263,24 +263,21 @@ describe("renderDependencies", () => {
 					],
 				},
 			],
-			new Map([
-				[
-					"vitest",
-					{
-						current: "4.1.7",
-						target: "4.2.0",
-						updateType: "minor",
-						state: "safe",
-					},
-				],
-			]),
+			{
+				vitest: {
+					current: "4.1.7",
+					target: "4.2.0",
+					updateType: "minor",
+					state: "safe",
+				},
+			},
 			new Set(["vitest"]),
 		);
 
 		expect(markdown).toContain("🟢 minor (safe) 📌 pin");
 	});
 
-	it("uses ecosystem-specific update maps", () => {
+	it("uses ecosystem-specific update records", () => {
 		const markdown = renderDependencies(
 			[
 				{
@@ -303,28 +300,22 @@ describe("renderDependencies", () => {
 				},
 			],
 			{
-				mise: new Map([
-					[
-						"aube",
-						{
-							current: "1.17.1",
-							target: "1.18.0",
-							updateType: "minor",
-							state: "safe",
-						},
-					],
-				]),
-				npm: new Map([
-					[
-						"aube",
-						{
-							current: "1.0.0",
-							target: "2.0.0",
-							updateType: "major",
-							state: "safe",
-						},
-					],
-				]),
+				mise: {
+					aube: {
+						current: "1.17.1",
+						target: "1.18.0",
+						updateType: "minor",
+						state: "safe",
+					},
+				},
+				npm: {
+					aube: {
+						current: "1.0.0",
+						target: "2.0.0",
+						updateType: "major",
+						state: "safe",
+					},
+				},
 			},
 		);
 
@@ -366,37 +357,28 @@ describe("listSafeUpgrades", () => {
 					],
 				},
 			],
-			new Map([
-				[
-					"aube",
-					{
-						current: "1.17.1",
-						target: "1.18.0",
-						updateType: "minor",
-						state: "safe",
-					},
-				],
-				[
-					"node",
-					{
-						current: "26.3.0",
-						target: null,
-						updateType: "minor",
-						state: "held",
-						heldVersion: "26.4.0",
-					},
-				],
-				[
-					"vitest",
-					{
-						current: "4.1.7",
-						target: "4.1.8",
-						updateType: "patch",
-						state: "safe-newer-held",
-						heldVersion: "4.2.0",
-					},
-				],
-			]),
+			{
+				aube: {
+					current: "1.17.1",
+					target: "1.18.0",
+					updateType: "minor",
+					state: "safe",
+				},
+				node: {
+					current: "26.3.0",
+					target: null,
+					updateType: "minor",
+					state: "held",
+					heldVersion: "26.4.0",
+				},
+				vitest: {
+					current: "4.1.7",
+					target: "4.1.8",
+					updateType: "patch",
+					state: "safe-newer-held",
+					heldVersion: "4.2.0",
+				},
+			},
 		);
 
 		expect(upgrades).toEqual([
@@ -419,7 +401,7 @@ describe("listSafeUpgrades", () => {
 		]);
 	});
 
-	it("lists safe upgrades from ecosystem-specific update maps", () => {
+	it("lists safe upgrades from ecosystem-specific update records", () => {
 		const upgrades = listSafeUpgrades(
 			[
 				{
@@ -442,28 +424,22 @@ describe("listSafeUpgrades", () => {
 				},
 			],
 			{
-				mise: new Map([
-					[
-						"aube",
-						{
-							current: "1.17.1",
-							target: "1.18.0",
-							updateType: "minor",
-							state: "safe",
-						},
-					],
-				]),
-				npm: new Map([
-					[
-						"aube",
-						{
-							current: "1.0.0",
-							target: "2.0.0",
-							updateType: "major",
-							state: "safe",
-						},
-					],
-				]),
+				mise: {
+					aube: {
+						current: "1.17.1",
+						target: "1.18.0",
+						updateType: "minor",
+						state: "safe",
+					},
+				},
+				npm: {
+					aube: {
+						current: "1.0.0",
+						target: "2.0.0",
+						updateType: "major",
+						state: "safe",
+					},
+				},
 			},
 		);
 

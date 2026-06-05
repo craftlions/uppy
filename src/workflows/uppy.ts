@@ -5,7 +5,7 @@ import {
 	listSafeUpgrades,
 	renderDependencies,
 } from "../deps.ts";
-import { repositoryAccessFor } from "../index.ts";
+import { nanoid, repositoryAccessFor } from "../index.ts";
 import { fetchMiseOutdated } from "../mise.ts";
 import {
 	fetchOsvVulnerabilityAlerts,
@@ -31,7 +31,6 @@ import {
 	logVulnerabilityAlerts,
 	renderVulnerabilityAlerts,
 } from "../vulnerability-alerts.ts";
-import { nanoid } from "../index.ts";
 
 type Params = { organization: string; repository: string };
 

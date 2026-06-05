@@ -1,4 +1,4 @@
-import type { Dependency, UpdateStatus } from "./deps.ts";
+import type { Dependency, UpdateRecord } from "./deps.ts";
 import { compare, parse } from "semver";
 import {
 	type OutdatedOptions,
@@ -128,28 +128,28 @@ export async function fetchMiseVersions(
 export async function fetchMiseOutdated(
 	dependencies: Dependency[],
 	options: OutdatedOptions = {},
-): Promise<Map<string, UpdateStatus>> {
+): Promise<UpdateRecord> {
 	const {
 		minimumReleaseAgeMs = THREE_DAYS_MS,
 		now = Date.now(),
 		...resolveOptions
 	} = options;
 
-	const currentByName = new Map<string, string>();
+	const currentByName: Record<string, string> = {};
 	for (const dep of dependencies) {
-		if (!currentByName.has(dep.name)) {
-			currentByName.set(dep.name, dep.version);
+		if (!(dep.name in currentByName)) {
+			currentByName[dep.name] = dep.version;
 		}
 	}
 
-	const names = [...currentByName.keys()];
+	const names = Object.keys(currentByName);
 	const results = await Promise.all(
 		names.map(async (name) => ({ name, data: await fetchMiseVersions(name) })),
 	);
 
-	const updates = new Map<string, UpdateStatus>();
+	const updates: UpdateRecord = {};
 	for (const { name, data } of results) {
-		const current = currentByName.get(name);
+		const current = currentByName[name];
 		if (!(current && data) || data.versions.length === 0) {
 			continue;
 		}
@@ -163,7 +163,7 @@ export async function fetchMiseOutdated(
 			resolveOptions,
 		);
 		if (status) {
-			updates.set(name, status);
+			updates[name] = status;
 		}
 	}
 

@@ -254,7 +254,7 @@ describe("fetchOutdated", () => {
 			["safe-pkg", "newer-held-pkg", "held-pkg", "current-pkg", "ghost"],
 			{ metadata: true, throw: false },
 		);
-		expect(Object.fromEntries(updates)).toEqual({
+		expect(updates).toEqual({
 			"safe-pkg": {
 				current: "1.0.0",
 				target: "1.1.0",
@@ -298,37 +298,28 @@ describe("renderDependencies with updates", () => {
 					],
 				},
 			],
-			new Map([
-				[
-					"safe",
-					{
-						current: "1.0.0",
-						target: "1.1.0",
-						updateType: "minor",
-						state: "safe",
-					},
-				],
-				[
-					"newer-held",
-					{
-						current: "1.0.0",
-						target: "1.1.0",
-						updateType: "minor",
-						state: "safe-newer-held",
-						heldVersion: "1.2.0",
-					},
-				],
-				[
-					"held",
-					{
-						current: "1.0.0",
-						target: null,
-						updateType: "minor",
-						state: "held",
-						heldVersion: "1.1.0",
-					},
-				],
-			]),
+			{
+				safe: {
+					current: "1.0.0",
+					target: "1.1.0",
+					updateType: "minor",
+					state: "safe",
+				},
+				"newer-held": {
+					current: "1.0.0",
+					target: "1.1.0",
+					updateType: "minor",
+					state: "safe-newer-held",
+					heldVersion: "1.2.0",
+				},
+				held: {
+					current: "1.0.0",
+					target: null,
+					updateType: "minor",
+					state: "held",
+					heldVersion: "1.1.0",
+				},
+			},
 		);
 
 		expect(markdown).toMatchInlineSnapshot(`
@@ -361,17 +352,14 @@ describe("renderDependencies with updates", () => {
 					],
 				},
 			],
-			new Map([
-				[
-					"aube",
-					{
-						current: "1.16.1",
-						target: "1.18.0",
-						updateType: "minor",
-						state: "safe",
-					},
-				],
-			]),
+			{
+				aube: {
+					current: "1.16.1",
+					target: "1.18.0",
+					updateType: "minor",
+					state: "safe",
+				},
+			},
 		);
 
 		expect(markdown).toContain(
@@ -396,7 +384,7 @@ describe("renderDependencies with updates", () => {
 					],
 				},
 			],
-			new Map(),
+			{},
 		);
 
 		expect(markdown).toContain("| Package | Version | Manifest |");

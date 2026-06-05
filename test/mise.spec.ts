@@ -119,7 +119,7 @@ describe("fetchMiseOutdated", () => {
 			{ now: NOW },
 		);
 
-		expect(Object.fromEntries(updates)).toEqual({
+		expect(updates).toEqual({
 			"safe-tool": {
 				current: "1.0.0",
 				target: "1.1.0",
@@ -155,7 +155,7 @@ describe("fetchMiseOutdated", () => {
 			},
 		);
 
-		expect(Object.fromEntries(updates)).toEqual({
+		expect(updates).toEqual({
 			tool: {
 				current: "1.0.0",
 				target: "1.1.0",
@@ -177,7 +177,7 @@ describe("fetchMiseOutdated", () => {
 			},
 		);
 
-		expect(Object.fromEntries(updates)).toEqual({
+		expect(updates).toEqual({
 			tool: {
 				current: "1.0.0",
 				target: "1.1.0",

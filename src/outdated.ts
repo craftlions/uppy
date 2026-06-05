@@ -1,4 +1,9 @@
-import type { Dependency, OutdatedInfo, UpdateStatus } from "./deps.ts";
+import type {
+	Dependency,
+	OutdatedInfo,
+	UpdateRecord,
+	UpdateStatus,
+} from "./deps.ts";
 import { getVersionsBatch } from "fast-npm-meta";
 import { compare, diff, gt, parse, valid } from "semver";
 
@@ -239,21 +244,21 @@ export interface OutdatedOptions extends ResolveOptions {
 export async function fetchOutdated(
 	dependencies: Dependency[],
 	options: OutdatedOptions = {},
-): Promise<Map<string, UpdateStatus>> {
+): Promise<UpdateRecord> {
 	const {
 		minimumReleaseAgeMs = THREE_DAYS_MS,
 		now = Date.now(),
 		...resolveOptions
 	} = options;
 
-	const currentByName = new Map<string, string>();
+	const currentByName: Record<string, string> = {};
 	for (const dep of dependencies) {
-		if (!currentByName.has(dep.name)) {
-			currentByName.set(dep.name, dep.version);
+		if (!(dep.name in currentByName)) {
+			currentByName[dep.name] = dep.version;
 		}
 	}
 
-	const names = [...currentByName.keys()];
+	const names = Object.keys(currentByName);
 	const chunks: string[][] = [];
 	for (let i = 0; i < names.length; i += BATCH_SIZE) {
 		chunks.push(names.slice(i, i + BATCH_SIZE));
@@ -265,12 +270,12 @@ export async function fetchOutdated(
 		),
 	);
 
-	const updates = new Map<string, UpdateStatus>();
+	const updates: UpdateRecord = {};
 	for (const entry of batches.flat()) {
 		if ("error" in entry) {
 			continue;
 		}
-		const current = currentByName.get(entry.name);
+		const current = currentByName[entry.name];
 		const latest = entry.distTags.latest;
 		if (!(current && latest)) {
 			continue;
@@ -291,7 +296,7 @@ export async function fetchOutdated(
 			resolveOptions,
 		);
 		if (status) {
-			updates.set(entry.name, status);
+			updates[entry.name] = status;
 		}
 	}
 
