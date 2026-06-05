@@ -82,6 +82,10 @@ export interface SafeUpgrade {
 	depType?: string;
 }
 
+export type UpdateMaps =
+	| ReadonlyMap<string, UpdateStatus>
+	| Partial<Record<string, ReadonlyMap<string, UpdateStatus>>>;
+
 /**
  * Minimal Octokit shape required to read file contents. Keeping it narrow makes
  * the function trivial to mock in unit tests while staying compatible with a
@@ -313,6 +317,20 @@ function updateStatusCells(status: UpdateStatus | undefined): {
 /** Ecosystems whose tables gain `Target`/`Update` columns when updates are known. */
 const UPDATABLE_ECOSYSTEMS = new Set(["npm", "mise"]);
 
+const isUpdateMap = (
+	updates: UpdateMaps | undefined,
+): updates is ReadonlyMap<string, UpdateStatus> => updates instanceof Map;
+
+function updatesForEcosystem(
+	updates: UpdateMaps | undefined,
+	ecosystem: string,
+): ReadonlyMap<string, UpdateStatus> | undefined {
+	if (!updates) {
+		return undefined;
+	}
+	return isUpdateMap(updates) ? updates : updates[ecosystem];
+}
+
 /** Render a plain `Package | Version | Manifest` table for an ecosystem. */
 function renderPlainSection(eco: DependencyEcosystem): string {
 	const rows = eco.files
@@ -332,7 +350,7 @@ function renderPlainSection(eco: DependencyEcosystem): string {
  */
 function renderUpdatableSection(
 	eco: DependencyEcosystem,
-	updates: Map<string, UpdateStatus>,
+	updates: ReadonlyMap<string, UpdateStatus>,
 	pins: ReadonlySet<string>,
 ): string {
 	const rows = eco.files
@@ -359,20 +377,19 @@ function renderUpdatableSection(
  */
 export function renderDependencies(
 	ecosystems: DependencyEcosystem[],
-	updates?: Map<string, UpdateStatus>[],
+	updates?: UpdateMaps,
 	pins: ReadonlySet<string> = new Set(),
 ): string {
 	if (ecosystems.length === 0) {
 		return "";
 	}
 
-	const sections = ecosystems.map((eco) =>
-		updates && UPDATABLE_ECOSYSTEMS.has(eco.ecosystem)
-			? updates
-					.map((update) => renderUpdatableSection(eco, update, pins))
-					.join("\n\n")
-			: renderPlainSection(eco),
-	);
+	const sections = ecosystems.map((eco) => {
+		const ecosystemUpdates = updatesForEcosystem(updates, eco.ecosystem);
+		return ecosystemUpdates && UPDATABLE_ECOSYSTEMS.has(eco.ecosystem)
+			? renderUpdatableSection(eco, ecosystemUpdates, pins)
+			: renderPlainSection(eco);
+	});
 
 	return `## Detected Dependencies\n\n${sections.join("\n\n")}`;
 }
@@ -380,7 +397,7 @@ export function renderDependencies(
 /** List every dependency whose resolved target has aged into a safe update. */
 export function listSafeUpgrades(
 	ecosystems: DependencyEcosystem[],
-	updates?: ReadonlyMap<string, UpdateStatus>,
+	updates?: UpdateMaps,
 ): SafeUpgrade[] {
 	if (!updates) {
 		return [];
@@ -388,9 +405,13 @@ export function listSafeUpgrades(
 
 	const upgrades: SafeUpgrade[] = [];
 	for (const eco of ecosystems) {
+		const ecosystemUpdates = updatesForEcosystem(updates, eco.ecosystem);
+		if (!ecosystemUpdates) {
+			continue;
+		}
 		for (const file of eco.files) {
 			for (const dep of file.dependencies) {
-				const status = updates.get(dep.name);
+				const status = ecosystemUpdates.get(dep.name);
 				if (status?.target) {
 					upgrades.push({
 						ecosystem: eco.ecosystem,

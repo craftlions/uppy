@@ -279,6 +279,62 @@ describe("renderDependencies", () => {
 
 		expect(markdown).toContain("🟢 minor (safe) 📌 pin");
 	});
+
+	it("uses ecosystem-specific update maps", () => {
+		const markdown = renderDependencies(
+			[
+				{
+					ecosystem: "mise",
+					files: [
+						{
+							file: "mise.toml",
+							dependencies: [{ name: "aube", version: "1.17.1" }],
+						},
+					],
+				},
+				{
+					ecosystem: "npm",
+					files: [
+						{
+							file: "package.json",
+							dependencies: [{ name: "aube", version: "1.0.0" }],
+						},
+					],
+				},
+			],
+			{
+				mise: new Map([
+					[
+						"aube",
+						{
+							current: "1.17.1",
+							target: "1.18.0",
+							updateType: "minor",
+							state: "safe",
+						},
+					],
+				]),
+				npm: new Map([
+					[
+						"aube",
+						{
+							current: "1.0.0",
+							target: "2.0.0",
+							updateType: "major",
+							state: "safe",
+						},
+					],
+				]),
+			},
+		);
+
+		expect(markdown).toContain(
+			"| `aube` | `1.17.1` | `1.18.0` | 🟢 minor (safe) | `mise.toml` |",
+		);
+		expect(markdown).toContain(
+			"| `aube` | `1.0.0` | `2.0.0` | 🟢 major (safe) | `package.json` |",
+		);
+	});
 });
 
 describe("listSafeUpgrades", () => {
@@ -359,6 +415,74 @@ describe("listSafeUpgrades", () => {
 				current: "4.1.7",
 				target: "4.1.8",
 				updateType: "patch",
+			},
+		]);
+	});
+
+	it("lists safe upgrades from ecosystem-specific update maps", () => {
+		const upgrades = listSafeUpgrades(
+			[
+				{
+					ecosystem: "mise",
+					files: [
+						{
+							file: "mise.toml",
+							dependencies: [{ name: "aube", version: "1.17.1" }],
+						},
+					],
+				},
+				{
+					ecosystem: "npm",
+					files: [
+						{
+							file: "package.json",
+							dependencies: [{ name: "aube", version: "1.0.0" }],
+						},
+					],
+				},
+			],
+			{
+				mise: new Map([
+					[
+						"aube",
+						{
+							current: "1.17.1",
+							target: "1.18.0",
+							updateType: "minor",
+							state: "safe",
+						},
+					],
+				]),
+				npm: new Map([
+					[
+						"aube",
+						{
+							current: "1.0.0",
+							target: "2.0.0",
+							updateType: "major",
+							state: "safe",
+						},
+					],
+				]),
+			},
+		);
+
+		expect(upgrades).toEqual([
+			{
+				ecosystem: "mise",
+				manifest: "mise.toml",
+				package: "aube",
+				current: "1.17.1",
+				target: "1.18.0",
+				updateType: "minor",
+			},
+			{
+				ecosystem: "npm",
+				manifest: "package.json",
+				package: "aube",
+				current: "1.0.0",
+				target: "2.0.0",
+				updateType: "major",
 			},
 		]);
 	});

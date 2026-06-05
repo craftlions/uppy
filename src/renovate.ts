@@ -4,10 +4,12 @@ import { err, ok, type Result } from "./result.ts";
 
 /**
  * A parsed Renovate configuration. Renovate configs are free-form JSON objects
- * (validated against Renovate's own schema elsewhere), so this is intentionally
- * an open record rather than a fully typed shape.
+ * (validated against Renovate's own schema elsewhere), so this stays open while
+ * still matching the structured-clone shape Workflow steps require.
  */
-export type RenovateConfig = Record<string, unknown>;
+export type RenovateConfigValue = Rpc.Serializable<unknown>;
+
+export type RenovateConfig = Record<string, RenovateConfigValue>;
 
 /**
  * Renovate config options this worker knows how to interpret. Other top-level

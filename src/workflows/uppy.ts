@@ -5,11 +5,12 @@ import {
 	listSafeUpgrades,
 	renderDependencies,
 } from "../deps.ts";
-import { nanoid, repositoryAccessFor } from "../index.ts";
+import { repositoryAccessFor } from "../index.ts";
 import { fetchMiseOutdated } from "../mise.ts";
 import {
 	fetchOsvVulnerabilityAlerts,
 	logOsvVulnerabilityAlerts,
+	type OsvVulnerabilityAlert,
 	renderOsvVulnerabilityAlerts,
 } from "../osv.ts";
 import {
@@ -25,167 +26,191 @@ import {
 	vulnerabilityAlertsEnabled,
 } from "../renovate.ts";
 import {
+	type DependabotAlert,
 	fetchVulnerabilityAlerts,
 	logVulnerabilityAlerts,
 	renderVulnerabilityAlerts,
 } from "../vulnerability-alerts.ts";
+import { nanoid } from "../index.ts";
 
 type Params = { organization: string; repository: string };
 
 export class UppyWorkflow extends WorkflowEntrypoint<Env, Params> {
 	async run(event: WorkflowEvent<Params>, step: WorkflowStep) {
-		const access = await repositoryAccessFor(
-			event.payload.organization,
-			event.payload.repository,
-		);
-		const octokit = access.octokit;
+		const { organization, repository } = event.payload;
 
-		const config = await step.do("fetch config", async () => {
-			const configResult = await detectRenovateConfig(
+		const detectedConfig = await step.do("detect Renovate config", async () => {
+			const { octokit } = await repositoryAccessFor(organization, repository);
+			const result = await detectRenovateConfig(
 				octokit,
-				event.payload.organization,
-				event.payload.repository,
+				organization,
+				repository,
 			);
-			const config =
-				configResult.ok && configResult.data !== null
-					? configResult.data.config
-					: undefined;
-			return JSON.stringify(config, null, 2);
+			if (!result.ok) {
+				throw result.error;
+			}
+			return result.data;
 		});
 
-		const ecosystems = await step.do("detect ecosystems", async () => {
-			const ecosystems = await detectDependencies(
-				octokit,
-				event.payload.organization,
-				event.payload.repository,
-			);
-			return JSON.stringify(ecosystems, null, 2);
+		const config = detectedConfig?.config;
+
+		const ecosystems = await step.do("detect dependencies", async () => {
+			const { octokit } = await repositoryAccessFor(organization, repository);
+			return await detectDependencies(octokit, organization, repository);
 		});
 
-		let vulnerabilityAlerts = [];
-		if (config && vulnerabilityAlertsEnabled(JSON.parse(config))) {
+		let vulnerabilityAlerts: DependabotAlert[] = [];
+		if (config && vulnerabilityAlertsEnabled(config)) {
 			vulnerabilityAlerts = await step.do(
-				"vulnerability alerts enabled",
+				"fetch GitHub vulnerability alerts",
 				async () => {
+					const { octokit } = await repositoryAccessFor(
+						organization,
+						repository,
+					);
 					try {
 						const alerts = await fetchVulnerabilityAlerts(
 							octokit,
-							event.payload.organization,
-							event.payload.repository,
+							organization,
+							repository,
 						);
 						logVulnerabilityAlerts(alerts);
 						return alerts;
-					} catch {
+					} catch (cause) {
+						console.warn(
+							`Failed to fetch GitHub vulnerability alerts for ${organization}/${repository}:`,
+							cause,
+						);
 						return [];
 					}
 				},
 			);
 		}
 
-		let osvAlerts = [];
-		if (config && osvVulnerabilityAlertsEnabled(JSON.parse(config))) {
-			osvAlerts = await Promise.all([
-				step.do("osv npm", async () => {
+		let osvAlerts: OsvVulnerabilityAlert[] = [];
+		if (config && osvVulnerabilityAlertsEnabled(config)) {
+			osvAlerts = await step.do(
+				"query OSV for npm vulnerabilities",
+				async () => {
+					const npmEcosystem = ecosystems.find(
+						(eco) => eco.ecosystem === "npm",
+					);
+					const dependencies =
+						npmEcosystem?.files.flatMap((file) => file.dependencies) ?? [];
 					try {
-						const alerts = await fetchOsvVulnerabilityAlerts(
-							JSON.parse(ecosystems)
-								.find((e) => e.ecosystem === "npm")
-								.files.flatMap((file) => file.dependencies),
-						);
+						const alerts = await fetchOsvVulnerabilityAlerts(dependencies);
 						logOsvVulnerabilityAlerts(alerts);
 						return alerts;
-					} catch {
+					} catch (cause) {
+						console.warn(
+							`Failed to query OSV for ${organization}/${repository}:`,
+							cause,
+						);
 						return [];
 					}
-				}),
-			]);
+				},
+			);
 		}
 
 		const minimumReleaseAge = effectiveMinimumReleaseAge(
-			npmMinimumReleaseAgeMs(JSON.parse(config)),
+			npmMinimumReleaseAgeMs(config ?? {}),
 		);
 
 		const updates = await Promise.all([
-			step.do("npm updates", async () => {
+			step.do("fetch outdated npm dependencies", async () => {
+				const npmEcosystem = ecosystems.find((eco) => eco.ecosystem === "npm");
 				return await fetchOutdated(
-					JSON.parse(ecosystems)
-						.find((e) => e.ecosystem === "npm")
-						?.files.flatMap((file) => file.dependencies) || [],
+					npmEcosystem?.files.flatMap((file) => file.dependencies) ?? [],
 					{ minimumReleaseAgeMs: minimumReleaseAge.ms },
 				);
 			}),
-			step.do("mise updates", async () => {
+			step.do("fetch outdated mise dependencies", async () => {
+				const miseEcosystem = ecosystems.find(
+					(eco) => eco.ecosystem === "mise",
+				);
 				return await fetchMiseOutdated(
-					JSON.parse(ecosystems)
-						.find((e) => e.ecosystem === "mise")
-						?.files.flatMap((file) => file.dependencies) || [],
-					{
-						minimumReleaseAgeMs: minimumReleaseAge.ms,
-					},
+					miseEcosystem?.files.flatMap((file) => file.dependencies) ?? [],
+					{ minimumReleaseAgeMs: minimumReleaseAge.ms },
 				);
 			}),
 		]);
+		const updatesByEcosystem = { npm: updates[0], mise: updates[1] };
 
-		const finalMarkdown = await step.do("generate markdown", async () => {
-			const vulnerabilityAlertsMarkdown =
-				renderVulnerabilityAlerts(vulnerabilityAlerts);
-			const osvAlertsMarkdown = renderOsvVulnerabilityAlerts(osvAlerts.flat());
-			const detected = await renderDependencies(
-				JSON.parse(ecosystems),
-				updates,
-			);
-			const dashboardMarkdown = `This issue lists Uppy updates and detected dependencies.\n\nLast updated at ${new Date().toISOString()}${
-				detected ? `\n\n${detected}` : ""
-			}`;
-			const minimumReleaseAgeNote = minimumReleaseAge.forced
-				? renderMinimumReleaseAgeNote()
-				: "";
-			const topSections = [
-				minimumReleaseAgeNote,
-				vulnerabilityAlertsMarkdown,
-				osvAlertsMarkdown,
-			].filter(Boolean);
-			return topSections.length > 0
-				? `${topSections.join("\n\n")}\n\n${dashboardMarkdown}`
-				: dashboardMarkdown;
+		const safeUpgrades = await step.do("list safe upgrades", async () => {
+			return listSafeUpgrades(ecosystems, updatesByEcosystem);
 		});
 
-		if (config && dependencyDashboardEnabled(JSON.parse(config))) {
-			await step.do("dependency dashboard enabled", async () => {
+		let safeUpgradesDispatched = 0;
+		if (safeUpgrades.length > 0) {
+			safeUpgradesDispatched = await step.do(
+				"dispatch safe upgrade workflows",
+				async () => {
+					const instances = await this.env.MISE_WORKFLOW.createBatch(
+						safeUpgrades.map((upgrade) => {
+							const slug = `${upgrade.ecosystem}-${upgrade.package.replaceAll("@", "").replaceAll("/", "-")}-${upgrade.target}`;
+							return {
+								id: `${event.instanceId}-mise-${nanoid()}`,
+								params: { branch: `uppy/${slug}` },
+							};
+						}),
+					);
+					return instances.length;
+				},
+			);
+		}
+
+		if (config && dependencyDashboardEnabled(config)) {
+			const dashboardMarkdown = await step.do(
+				"render dashboard markdown",
+				async () => {
+					const vulnerabilityAlertsMarkdown =
+						renderVulnerabilityAlerts(vulnerabilityAlerts);
+					const osvAlertsMarkdown = renderOsvVulnerabilityAlerts(osvAlerts);
+					const detected = renderDependencies(ecosystems, updatesByEcosystem);
+					const header = `This issue lists Uppy updates and detected dependencies.\n\nLast updated at ${new Date().toISOString()}`;
+					const body = detected ? `\n\n${detected}` : "";
+					const prefix = [
+						minimumReleaseAge.forced ? renderMinimumReleaseAgeNote() : "",
+						vulnerabilityAlertsMarkdown,
+						osvAlertsMarkdown,
+					]
+						.filter(Boolean)
+						.join("\n\n");
+					return prefix ? `${prefix}\n\n${header}${body}` : `${header}${body}`;
+				},
+			);
+
+			await step.do("sync dependency dashboard issue", async () => {
+				const { octokit } = await repositoryAccessFor(organization, repository);
 				const issues = await octokit.rest.issues.listForRepo({
-					owner: event.payload.organization,
-					repo: event.payload.repository,
+					owner: organization,
+					repo: repository,
 					state: "open",
 					creator: "craftlions-uppy[bot]",
 				});
 				if (issues.data.length > 0) {
 					await octokit.rest.issues.update({
-						owner: event.payload.organization,
-						repo: event.payload.repository,
+						owner: organization,
+						repo: repository,
 						issue_number: issues.data[0].number,
-						body: finalMarkdown,
+						body: dashboardMarkdown,
 					});
 				} else {
 					await octokit.rest.issues.create({
-						owner: event.payload.organization,
-						repo: event.payload.repository,
+						owner: organization,
+						repo: repository,
 						title: "Uppy Dashboard",
-						body: finalMarkdown,
+						body: dashboardMarkdown,
 					});
 				}
 			});
 		}
 
-		await step.do("safe upgrades", async () => {
-			const safeUpgrades = listSafeUpgrades(JSON.parse(ecosystems), updates[0]);
-			for (const safeUpgrade of safeUpgrades) {
-				await this.env.MISE_WORKFLOW.create({
-					id: `${event.instanceId}-mise-${nanoid()}`,
-					params: {
-						branch: `uppy/${safeUpgrade.ecosystem}-${safeUpgrade.package.replaceAll("@", "").replaceAll("/", "-")}-${safeUpgrade.target}`,
-					},
-				});
-			}
-		});
+		return {
+			organization,
+			repository,
+			configPath: detectedConfig?.path ?? null,
+			safeUpgradesDispatched,
+		};
 	}
 }
