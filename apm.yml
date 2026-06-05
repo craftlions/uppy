@@ -18,7 +18,5 @@ dependencies:
     - chrome-devtools-mcp
     - --autoConnect
     - --channel=beta
-  apm:
-  - cloudflare/skills#main
 includes: auto
 scripts: {}

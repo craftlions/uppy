@@ -10,7 +10,7 @@ coverage
 # APM dependencies
 apm_modules/
 
-.agents
+.agents/**
 .claude
 .codex
 .gemini
@@ -21,3 +21,5 @@ opencode.json
 .mcp.json
 AGENTS.md
 GEMINI.md
+
+!.agents/rosie.lock

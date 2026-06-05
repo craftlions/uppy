@@ -1,56 +1,9 @@
 lockfile_version: '1'
-generated_at: '2026-06-05T20:02:51.789626+00:00'
+generated_at: '2026-06-05T20:56:40.953677+00:00'
 apm_version: 0.16.1
-dependencies:
-- repo_url: cloudflare/skills
-  host: github.com
-  resolved_commit: c5b7b06b073fa0b4abbd63964630f97d81da69c4
-  resolved_ref: main
-  package_type: marketplace_plugin
-  deployed_files:
-  - .agents/skills/agents-sdk
-  - .agents/skills/cloudflare
-  - .agents/skills/cloudflare-email-service
-  - .agents/skills/durable-objects
-  - .agents/skills/sandbox-sdk
-  - .agents/skills/turnstile-spin
-  - .agents/skills/web-perf
-  - .agents/skills/workers-best-practices
-  - .agents/skills/wrangler
-  - .claude/commands/build-agent.md
-  - .claude/commands/build-mcp.md
-  - .claude/skills/agents-sdk
-  - .claude/skills/cloudflare
-  - .claude/skills/cloudflare-email-service
-  - .claude/skills/durable-objects
-  - .claude/skills/sandbox-sdk
-  - .claude/skills/turnstile-spin
-  - .claude/skills/web-perf
-  - .claude/skills/workers-best-practices
-  - .claude/skills/wrangler
-  - .gemini/commands/build-agent.toml
-  - .gemini/commands/build-mcp.toml
-  - .github/prompts/build-agent.prompt.md
-  - .github/prompts/build-mcp.prompt.md
-  - .opencode/commands/build-agent.md
-  - .opencode/commands/build-mcp.md
-  deployed_file_hashes:
-    .claude/commands/build-agent.md: sha256:2a047542742e35246d9eff4128b1543c5ffa41dc44d347e8dd1bc554cf33d494
-    .claude/commands/build-mcp.md: sha256:78ee1ce2ad9a4904a45843f0aeaeb509cdd67b8931275f1277e80d655753c223
-    .gemini/commands/build-agent.toml: sha256:5ef386b54118dcf3b9bd0431e6bdaa8051ee2344dce24ae66ec9281d79183063
-    .gemini/commands/build-mcp.toml: sha256:0815a914506692bc511427003e403c7cb669ee6ed09527ff7013cff1dd8cef6f
-    .github/prompts/build-agent.prompt.md: sha256:4d2f9777e0bfdd7581921f81459b9a66f78bbbce47a6d890de0a317852b4f46a
-    .github/prompts/build-mcp.prompt.md: sha256:265c29d38cd8f2e59ae097e4d23e53635792a9d34a1187d8208b12775cad5ce6
-    .opencode/commands/build-agent.md: sha256:2a047542742e35246d9eff4128b1543c5ffa41dc44d347e8dd1bc554cf33d494
-    .opencode/commands/build-mcp.md: sha256:78ee1ce2ad9a4904a45843f0aeaeb509cdd67b8931275f1277e80d655753c223
-  content_hash: sha256:c5e42ed733ddedb1cac264bf69affa222ed59f009994dd5c51115b0b76e35187
+dependencies: []
 mcp_servers:
 - chrome-devtools
-- cloudflare-api
-- cloudflare-bindings
-- cloudflare-builds
-- cloudflare-docs
-- cloudflare-observability
 mcp_configs:
   chrome-devtools:
     name: chrome-devtools
@@ -61,31 +14,6 @@ mcp_configs:
     - --channel=beta
     registry: false
     command: aubx
-  cloudflare-api:
-    name: cloudflare-api
-    transport: http
-    registry: false
-    url: https://mcp.cloudflare.com/mcp
-  cloudflare-bindings:
-    name: cloudflare-bindings
-    transport: http
-    registry: false
-    url: https://bindings.mcp.cloudflare.com/mcp
-  cloudflare-builds:
-    name: cloudflare-builds
-    transport: http
-    registry: false
-    url: https://builds.mcp.cloudflare.com/mcp
-  cloudflare-docs:
-    name: cloudflare-docs
-    transport: http
-    registry: false
-    url: https://docs.mcp.cloudflare.com/mcp
-  cloudflare-observability:
-    name: cloudflare-observability
-    transport: http
-    registry: false
-    url: https://observability.mcp.cloudflare.com/mcp
 local_deployed_files:
 - .claude/rules/cli.md
 - .claude/rules/linting.md
