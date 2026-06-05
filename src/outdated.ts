@@ -265,18 +265,13 @@ export async function fetchOutdated(
 	}
 
 	const batches = await Promise.all(
-		chunks.map((chunk) =>
-			getVersionsBatch(chunk, { metadata: true, throw: false }),
-		),
+		chunks.map((chunk) => getVersionsBatch(chunk, { metadata: true })),
 	);
 
 	const updates: UpdateRecord = {};
 	for (const entry of batches.flat()) {
-		if ("error" in entry) {
-			continue;
-		}
 		const current = currentByName[entry.name];
-		const latest = entry.distTags.latest;
+		const latest = entry.distTags?.latest;
 		if (!(current && latest)) {
 			continue;
 		}

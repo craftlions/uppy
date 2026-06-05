@@ -252,7 +252,7 @@ describe("fetchOutdated", () => {
 
 		expect(getVersionsBatch).toHaveBeenCalledWith(
 			["safe-pkg", "newer-held-pkg", "held-pkg", "current-pkg", "ghost"],
-			{ metadata: true, throw: false },
+			{ metadata: true },
 		);
 		expect(updates).toEqual({
 			"safe-pkg": {
