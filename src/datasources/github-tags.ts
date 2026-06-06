@@ -227,9 +227,12 @@ function composeDigestStatus(
 	const pinVersion = status?.target ?? current;
 	const targetDigest = info.digests?.[pinVersion] ?? info.currentDigest;
 	const currentDigest = info.currentDigest;
+	// Only carry `currentDigest` when the ref is actually digest-pinned; a floating
+	// tag leaves it undefined and the field should be absent, not explicitly unset.
+	const pin = currentDigest !== undefined ? { currentDigest } : {};
 
 	if (status) {
-		return { ...status, currentDigest, targetDigest };
+		return { ...status, ...pin, targetDigest };
 	}
 	if (targetDigest !== undefined && currentDigest !== targetDigest) {
 		return {
@@ -237,7 +240,7 @@ function composeDigestStatus(
 			target: current,
 			updateType: "digest",
 			state: "safe",
-			currentDigest,
+			...pin,
 			targetDigest,
 		};
 	}
