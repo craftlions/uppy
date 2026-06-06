@@ -27,7 +27,9 @@ describe("datasourceNpm.lookup", () => {
 				},
 			]);
 
-		const found = await datasourceNpm.lookup(names);
+		const found = await datasourceNpm.lookup(
+			names.map((name) => ({ name, ref: "1.0.0" })),
+		);
 
 		expect(getVersionsBatch).toHaveBeenCalledTimes(2);
 		expect(getVersionsBatch.mock.calls[0][0]).toHaveLength(50);
@@ -49,7 +51,7 @@ describe("datasourceNpm.lookup", () => {
 			{ name: "ghost", status: 404, error: "Not Found" },
 		]);
 
-		const found = await datasourceNpm.lookup(["ghost"]);
+		const found = await datasourceNpm.lookup([{ name: "ghost", ref: "1.0.0" }]);
 
 		expect(found.has("ghost")).toBe(false);
 	});

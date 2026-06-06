@@ -2,6 +2,12 @@ import { valid } from "semver";
 
 export interface Dependency {
 	name: string;
+	/**
+	 * The raw manifest spec, used as the lookup `ref` a {@link Datasource}
+	 * resolves. For npm and mise this is the version (range operators stripped);
+	 * for github-actions it is the raw `@ref` — a tag (`v4.1.0`), a coarse tag
+	 * (`v4`), a commit sha, or a branch.
+	 */
 	version: string;
 	/**
 	 * Whether the manifest spec is an exact pin (e.g. `1.2.3`) rather than a range
@@ -11,10 +17,16 @@ export interface Dependency {
 	pinned?: boolean;
 	/**
 	 * The dependency group this came from, used to match Renovate's
-	 * `matchDepTypes` (e.g. `dependencies`, `devDependencies`). Absent for
-	 * ecosystems without dependency types, such as mise.
+	 * `matchDepTypes` (e.g. `dependencies`, `devDependencies`, `action`). Absent
+	 * for ecosystems without dependency types, such as mise.
 	 */
 	depType?: string;
+	/**
+	 * The trailing version comment on a sha-pinned github-actions ref
+	 * (`@<sha> # v4.1.0`). Cosmetic: uppy reasons over the sha, not the comment,
+	 * but it is kept for display and for rewriting the comment on a bump.
+	 */
+	comment?: string;
 }
 
 export interface DependencyFile {
@@ -64,12 +76,27 @@ export interface UpdateStatus {
 	 * version has aged past the minimum release age yet.
 	 */
 	target: string | null;
-	/** Semver bump type from current to `target` (or to `heldVersion` when held). */
+	/**
+	 * Bump type from current to `target` (or to `heldVersion` when held). The
+	 * literal `digest` marks a github-actions recommendation that pins or moves
+	 * the commit sha without changing the version.
+	 */
 	updateType: string;
 	/** Whether the update clears the minimum release age window. */
 	state: UpdateState;
 	/** The newest acceptable version that is still too fresh, when one exists. */
 	heldVersion?: string;
+	/**
+	 * github-actions only: the commit sha the manifest is currently pinned to, or
+	 * `undefined` when the action floats on a tag (i.e. is not yet digest-pinned).
+	 */
+	currentDigest?: string;
+	/**
+	 * github-actions only: the commit sha uppy recommends pinning to — the sha of
+	 * `target` (or of the current version when only a pin is needed). Differs from
+	 * `currentDigest` exactly when a pin or digest move is recommended.
+	 */
+	targetDigest?: string;
 }
 
 export interface SafeUpgrade {
@@ -222,45 +249,16 @@ export async function fetchFileContent(
 }
 
 /**
- * Read the supported manifest files from a repository and parse the installed
- * dependencies and versions grouped by ecosystem.
+ * The stable key an {@link UpdateStatus} is stored under in an
+ * {@link UpdateRecord}. For most ecosystems a dependency name is unique within a
+ * manifest set, so the name suffices. github-actions is the exception: the same
+ * `owner/repo` action can appear at different refs across workflow files, so its
+ * key includes the ref to keep those occurrences distinct.
  */
-export async function detectDependencies(
-	octokit: ContentReader,
-	owner: string,
-	repo: string,
-): Promise<DependencyEcosystem[]> {
-	const ecosystems: DependencyEcosystem[] = [];
-
-	const miseContent = await fetchFileContent(octokit, owner, repo, "mise.toml");
-	if (miseContent) {
-		const dependencies = parseMiseToml(miseContent);
-		if (dependencies.length > 0) {
-			ecosystems.push({
-				ecosystem: "mise",
-				files: [{ file: "mise.toml", dependencies }],
-			});
-		}
-	}
-
-	const pkgContent = await fetchFileContent(
-		octokit,
-		owner,
-		repo,
-		"package.json",
-	);
-	if (pkgContent) {
-		const dependencies = parsePackageJson(pkgContent);
-		if (dependencies.length > 0) {
-			ecosystems.push({
-				ecosystem: "npm",
-				files: [{ file: "package.json", dependencies }],
-			});
-		}
-	}
-
-	return ecosystems;
-}
+export const dependencyKey = (
+	dep: Pick<Dependency, "name" | "version" | "depType">,
+): string =>
+	dep.depType === "action" ? `${dep.name}@${dep.version}` : dep.name;
 
 function isUpdateRecord(
 	updates: UpdateRecords,
@@ -304,7 +302,10 @@ export function listSafeUpgrades(
 		}
 		for (const file of eco.files) {
 			for (const dep of file.dependencies) {
-				const status = updateForDependency(ecosystemUpdates, dep.name);
+				const status = updateForDependency(
+					ecosystemUpdates,
+					dependencyKey(dep),
+				);
 				if (status?.target) {
 					upgrades.push({
 						ecosystem: eco.ecosystem,

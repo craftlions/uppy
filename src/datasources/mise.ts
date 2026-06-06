@@ -3,9 +3,11 @@ import type { OutdatedOptions } from "../outdated.ts";
 import { compare, parse } from "semver";
 import {
 	type Datasource,
+	type DependencyRef,
 	fetchOutdated,
 	type VersionInfo,
 } from "../datasource.ts";
+import { semverVersioning } from "../versioning.ts";
 
 /**
  * Where the per-tool version lists live. mise-versions publishes one
@@ -123,9 +125,10 @@ export async function fetchVersionsMise(
  * docs toml (or no parseable versions) are omitted.
  */
 export const datasourceMise: Datasource = {
-	async lookup(names: string[]): Promise<Map<string, VersionInfo>> {
+	versioning: semverVersioning,
+	async lookup(refs: DependencyRef[]): Promise<Map<string, VersionInfo>> {
 		const results = await Promise.all(
-			names.map(async (name) => ({
+			refs.map(async ({ name }) => ({
 				name,
 				data: await fetchVersionsMise(name),
 			})),

@@ -321,4 +321,63 @@ describe("renderDependencyDashboard", () => {
 		expect(dashboard).toContain("| Package | Version | Manifest |");
 		expect(dashboard).toContain("| `node` | `26.3.0` | `Dockerfile` |");
 	});
+
+	it("renders the github-actions section with version+sha cells", () => {
+		const shaA = "a".repeat(40);
+		const shaB = "b".repeat(40);
+		const dashboard = renderDependencyDashboard(
+			input({
+				ecosystems: [
+					{
+						ecosystem: "github-actions",
+						files: [
+							{
+								file: ".github/workflows/ci.yml",
+								dependencies: [
+									{
+										name: "actions/checkout",
+										version: "v4.1.0",
+										depType: "action",
+										pinned: false,
+									},
+									{
+										name: "actions/setup-node",
+										version: shaA,
+										depType: "action",
+										pinned: true,
+										comment: "v4.0.0",
+									},
+								],
+							},
+						],
+					},
+				],
+				updatesByEcosystem: {
+					"github-actions": {
+						"actions/checkout@v4.1.0": {
+							current: "v4.1.0",
+							target: "v4.2.0",
+							updateType: "minor",
+							state: "safe",
+							targetDigest: shaB,
+						},
+					},
+				},
+			}),
+		);
+
+		expect(dashboard).toContain("### github-actions (2)");
+		expect(dashboard).toContain(
+			"| Action | Current | Target | Update | Workflow |",
+		);
+		// Floating tag: pinned to the bumped version's sha.
+		expect(dashboard).toContain(
+			"| `actions/checkout` | `v4.1.0` | `v4.2.0` (`bbbbbbb`) | 🟢 minor (safe) 📌 pin digest | `.github/workflows/ci.yml` |",
+		);
+		// Already pinned and current: shows the ground-truth sha only — the
+		// untrusted `# v4.0.0` comment is never rendered as the version.
+		expect(dashboard).toContain(
+			"| `actions/setup-node` | `aaaaaaa` | — | ✅ up to date | `.github/workflows/ci.yml` |",
+		);
+	});
 });

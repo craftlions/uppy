@@ -19,10 +19,10 @@ function fakeDatasource(table: Record<string, VersionInfo>): {
 } {
 	const calls: string[][] = [];
 	const datasource: Datasource = {
-		lookup(names) {
-			calls.push(names);
+		lookup(refs) {
+			calls.push(refs.map((ref) => ref.name));
 			const found = new Map<string, VersionInfo>();
-			for (const name of names) {
+			for (const { name } of refs) {
 				const info = table[name];
 				if (info) {
 					found.set(name, info);

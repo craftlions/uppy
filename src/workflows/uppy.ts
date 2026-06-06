@@ -1,14 +1,18 @@
 import type { WorkflowEvent } from "cloudflare:workers";
 import { WorkflowEntrypoint, type WorkflowStep } from "cloudflare:workers";
-import { fetchOutdatedMise } from "../datasources/mise.ts";
-import { fetchOutdatedNpm } from "../datasources/npm.ts";
+import { fetchOutdated } from "../datasource.ts";
 import {
 	type PinAction,
 	renderDependencyDashboard,
 } from "../dependency-dashboard.ts";
-import { detectDependencies, listSafeUpgrades } from "../deps.ts";
+import { listSafeUpgrades, type UpdateRecord } from "../deps.ts";
 import { repositoryAccessFor } from "../github.ts";
 import { nanoid } from "../ids.ts";
+import {
+	datasourceFor,
+	detectDependencies,
+	managerByName,
+} from "../manager.ts";
 import {
 	fetchOsvVulnerabilityAlerts,
 	logOsvVulnerabilityAlerts,
@@ -112,25 +116,31 @@ export class UppyWorkflow extends WorkflowEntrypoint<Env, Params> {
 			npmMinimumReleaseAgeMs(config ?? {}),
 		);
 
-		const updates = await Promise.all([
-			step.do("fetch-outdated-npm-dependencies", async () => {
-				const npmEcosystem = ecosystems.find((eco) => eco.ecosystem === "npm");
-				return await fetchOutdatedNpm(
-					npmEcosystem?.files.flatMap((file) => file.dependencies) ?? [],
-					{ minimumReleaseAgeMs: minimumReleaseAge.ms },
-				);
-			}),
-			step.do("fetch-outdated-mise-dependencies", async () => {
-				const miseEcosystem = ecosystems.find(
-					(eco) => eco.ecosystem === "mise",
-				);
-				return await fetchOutdatedMise(
-					miseEcosystem?.files.flatMap((file) => file.dependencies) ?? [],
-					{ minimumReleaseAgeMs: minimumReleaseAge.ms },
-				);
-			}),
-		]);
-		const updatesByEcosystem = { npm: updates[0], mise: updates[1] };
+		const updateEntries = await Promise.all(
+			ecosystems.map((eco) =>
+				step.do(`fetch-outdated-${eco.ecosystem}-dependencies`, async () => {
+					const manager = managerByName(eco.ecosystem);
+					if (!manager) {
+						return [eco.ecosystem, {} as UpdateRecord] as const;
+					}
+					const { octokit } = await repositoryAccessFor(
+						organization,
+						repository,
+					);
+					const datasource = datasourceFor(manager.datasource, octokit);
+					if (!datasource) {
+						return [eco.ecosystem, {} as UpdateRecord] as const;
+					}
+					const dependencies = eco.files.flatMap((file) => file.dependencies);
+					const updates = await fetchOutdated(dependencies, datasource, {
+						minimumReleaseAgeMs: minimumReleaseAge.ms,
+					});
+					return [eco.ecosystem, updates] as const;
+				}),
+			),
+		);
+		const updatesByEcosystem: Partial<Record<string, UpdateRecord>> =
+			Object.fromEntries(updateEntries);
 
 		const safeUpgrades = await step.do("list-safe-upgrades", async () => {
 			return listSafeUpgrades(ecosystems, updatesByEcosystem);

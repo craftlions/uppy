@@ -3,9 +3,11 @@ import type { OutdatedOptions } from "../outdated.ts";
 import { getVersionsBatch } from "fast-npm-meta";
 import {
 	type Datasource,
+	type DependencyRef,
 	fetchOutdated,
 	type VersionInfo,
 } from "../datasource.ts";
+import { semverVersioning } from "../versioning.ts";
 
 /** The npm.antfu.dev endpoint caps each batch lookup; chunk requests to match. */
 const BATCH_SIZE = 50;
@@ -17,7 +19,9 @@ const BATCH_SIZE = 50;
  * omitted.
  */
 export const datasourceNpm: Datasource = {
-	async lookup(names: string[]): Promise<Map<string, VersionInfo>> {
+	versioning: semverVersioning,
+	async lookup(refs: DependencyRef[]): Promise<Map<string, VersionInfo>> {
+		const names = refs.map((ref) => ref.name);
 		const chunks: string[][] = [];
 		for (let i = 0; i < names.length; i += BATCH_SIZE) {
 			chunks.push(names.slice(i, i + BATCH_SIZE));

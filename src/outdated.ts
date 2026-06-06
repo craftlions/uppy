@@ -1,5 +1,5 @@
 import type { OutdatedInfo, UpdateStatus } from "./deps.ts";
-import { compare, diff, gt, parse, valid } from "semver";
+import { semverVersioning, type Versioning } from "./versioning.ts";
 
 /**
  * Renovate's default stability knobs. See
@@ -23,61 +23,54 @@ export interface ResolveOptions {
 	respectLatest?: boolean;
 }
 
-const isUnstable = (version: { prerelease: readonly unknown[] }): boolean =>
-	version.prerelease.length > 0;
-
 /**
  * Every version newer than `current` that Renovate's default policy would accept
  * as an update target, sorted ascending. Mirrors Renovate's defaults: unstable
  * versions are ignored unless `current` is already an unstable prerelease of the
- * same `major.minor.patch` (so a bump never jumps across prerelease tracks), and
- * updates never overshoot the `latest` dist-tag.
+ * same base (so a bump never jumps across prerelease tracks), and updates never
+ * overshoot the `latest` dist-tag. The supplied {@link Versioning} decides what
+ * "newer", "stable", and "same base" mean for the ecosystem.
  */
 function acceptableUpdates(
 	current: string,
 	versions: string[],
 	latest: string,
+	versioning: Versioning,
 	options: ResolveOptions = {},
 ): string[] {
 	const { ignoreUnstable = true, respectLatest = true } = options;
 
-	const currentVersion = parse(current);
-	if (!currentVersion) {
+	if (!versioning.isValid(current)) {
 		return [];
 	}
-	const currentUnstable = isUnstable(currentVersion);
+	const currentStable = versioning.isStable(current);
 
 	const respectsLatest =
-		respectLatest && valid(latest) !== null && !gt(current, latest);
-
-	const sameBaseAsCurrent = (candidate: ReturnType<typeof parse>): boolean =>
-		candidate !== null &&
-		candidate.major === currentVersion.major &&
-		candidate.minor === currentVersion.minor &&
-		candidate.patch === currentVersion.patch;
+		respectLatest &&
+		versioning.isValid(latest) &&
+		!(versioning.compare(current, latest) > 0);
 
 	const candidates: string[] = [];
 	for (const version of versions) {
-		const candidate = parse(version);
-		if (!(candidate && gt(version, current))) {
+		if (!versioning.isUpgrade(current, version)) {
 			continue;
 		}
-		if (respectsLatest && gt(version, latest)) {
+		if (respectsLatest && versioning.compare(version, latest) > 0) {
 			continue;
 		}
 		// ignoreUnstable: only allow a prerelease target when the current version
-		// is already a prerelease sharing the same major.minor.patch.
+		// is already a prerelease sharing the same base.
 		if (
 			ignoreUnstable &&
-			isUnstable(candidate) &&
-			!(currentUnstable && sameBaseAsCurrent(candidate))
+			!versioning.isStable(version) &&
+			!(!currentStable && versioning.isSameBase(version, current))
 		) {
 			continue;
 		}
 		candidates.push(version);
 	}
 
-	return candidates.sort((a, b) => compare(a, b));
+	return candidates.sort((a, b) => versioning.compare(a, b));
 }
 
 /**
@@ -90,15 +83,22 @@ export function resolveUpdate(
 	versions: string[],
 	latest: string,
 	options: ResolveOptions = {},
+	versioning: Versioning = semverVersioning,
 ): OutdatedInfo | null {
-	const best = acceptableUpdates(current, versions, latest, options).at(-1);
+	const best = acceptableUpdates(
+		current,
+		versions,
+		latest,
+		versioning,
+		options,
+	).at(-1);
 	if (best === undefined) {
 		return null;
 	}
 	return {
 		current,
 		target: best,
-		updateType: diff(current, best) ?? "patch",
+		updateType: versioning.difference(current, best) ?? "patch",
 	};
 }
 
@@ -164,8 +164,15 @@ export function resolveUpdateStatus(
 	minAgeMs: number,
 	now: number,
 	options: ResolveOptions = {},
+	versioning: Versioning = semverVersioning,
 ): UpdateStatus | null {
-	const candidates = acceptableUpdates(current, versions, latest, options);
+	const candidates = acceptableUpdates(
+		current,
+		versions,
+		latest,
+		versioning,
+		options,
+	);
 	const newest = candidates.at(-1);
 	if (newest === undefined) {
 		return null;
@@ -183,7 +190,7 @@ export function resolveUpdateStatus(
 		return {
 			current,
 			target: null,
-			updateType: diff(current, newest) ?? "patch",
+			updateType: versioning.difference(current, newest) ?? "patch",
 			state: "held",
 			heldVersion: newest,
 		};
@@ -192,14 +199,14 @@ export function resolveUpdateStatus(
 		return {
 			current,
 			target: safeTarget,
-			updateType: diff(current, safeTarget) ?? "patch",
+			updateType: versioning.difference(current, safeTarget) ?? "patch",
 			state: "safe",
 		};
 	}
 	return {
 		current,
 		target: safeTarget,
-		updateType: diff(current, safeTarget) ?? "patch",
+		updateType: versioning.difference(current, safeTarget) ?? "patch",
 		state: "safe-newer-held",
 		heldVersion: newest,
 	};

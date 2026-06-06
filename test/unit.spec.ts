@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import {
 	type ContentReader,
-	detectDependencies,
 	listSafeUpgrades,
 	parseMiseToml,
 	parsePackageJson,
 } from "../src/deps.ts";
+import { detectDependencies } from "../src/manager.ts";
 
 const MISE_TOML = `[tools]
 "github:endevco/aube" = "1.17.1"
