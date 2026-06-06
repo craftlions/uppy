@@ -9,16 +9,31 @@ a safe update, and reports them on a Dependency Dashboard.
 **Manager**:
 The file-reading half of an update check: the thing that parses a family of
 manifests (`npm`/`package.json`, `mise`/`mise.toml`, `github-actions`/workflow
-files) and tags each dependency with the Datasource that resolves it. Renovate's
-manager vocabulary.
+files). A Manager may tag different dependencies with different Datasources;
+`mise` remains one Manager even when its tools resolve through `core`, `github`,
+`aqua`, or `npm`. Renovate's manager vocabulary.
 _Avoid_: ecosystem (the old fused term), parser, extractor
 
 **Datasource**:
 The source of a dependency's version metadata — its released versions, publish
-times, and `latest`. Independent of any one Manager: `github-tags` resolves what
-the `github-actions` manager extracts, while `npm` and `mise` pair with their
-like-named managers. Renovate's `matchDatasources` vocabulary.
+times, and `latest`. Independent of any one Manager: `github-tags` resolves
+GitHub Actions, `github-releases` resolves GitHub-backed mise tools, and `npm`
+resolves both package manifests and npm-backed mise tools. Renovate's
+`matchDatasources` vocabulary.
 _Avoid_: VersionSource, registry client, provider
+
+**Mise backend**:
+The plain full source identity behind a mise tool, such as `core:node`,
+`aqua:aws/aws-cli`, `github:endevco/aube`, or `npm:@openai/codex`.
+uppy shows this full identity to users and uses the backend-specific name only
+when asking a Datasource for version metadata.
+_Avoid_: mise datasource, mise provider
+
+**Unsupported dependency**:
+A manifest entry uppy recognises but deliberately cannot update, such as an
+unprefixed mise tool shorthand or decorated mise backend identity. It is shown
+for user awareness, not resolved.
+_Avoid_: missing dependency, ignored dependency
 
 **Versioning**:
 The scheme a Datasource uses to compare versions, classify a bump, and judge

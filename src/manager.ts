@@ -4,11 +4,13 @@ import type {
 	DependencyEcosystem,
 	DependencyFile,
 } from "./deps.ts";
+import { createAquaDatasource } from "./datasources/aqua.ts";
+import { createGithubReleasesDatasource } from "./datasources/github-releases.ts";
 import {
 	createGithubTagsDatasource,
 	type GraphqlClient,
 } from "./datasources/github-tags.ts";
-import { datasourceMise } from "./datasources/mise.ts";
+import { datasourceCore } from "./datasources/mise.ts";
 import { datasourceNpm } from "./datasources/npm.ts";
 import { githubActionsManager } from "./managers/github-actions.ts";
 import { miseManager } from "./managers/mise.ts";
@@ -22,8 +24,8 @@ import { npmManager } from "./managers/npm.ts";
 export interface Manager {
 	/** Renovate manager name; also the dashboard section and ecosystem label. */
 	readonly name: string;
-	/** The datasource that resolves the dependencies this manager extracts. */
-	readonly datasource: string;
+	/** The default datasource for dependencies without their own datasource. */
+	readonly datasource?: string;
 	/** Read and parse this manager's manifests from a repository. */
 	detect(
 		octokit: ContentReader,
@@ -74,10 +76,14 @@ export function datasourceFor(
 	client: GraphqlClient,
 ): Datasource | null {
 	switch (name) {
+		case "aqua":
+			return createAquaDatasource(client);
+		case "core":
+			return datasourceCore;
 		case "npm":
 			return datasourceNpm;
-		case "mise":
-			return datasourceMise;
+		case "github-releases":
+			return createGithubReleasesDatasource(client);
 		case "github-tags":
 			return createGithubTagsDatasource(client);
 		default:

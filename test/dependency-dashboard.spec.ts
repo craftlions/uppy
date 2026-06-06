@@ -322,6 +322,39 @@ describe("renderDependencyDashboard", () => {
 		expect(dashboard).toContain("| `node` | `26.3.0` | `Dockerfile` |");
 	});
 
+	it("renders unsupported dependencies as an informational note", () => {
+		const dashboard = renderDependencyDashboard(
+			input({
+				ecosystems: [
+					{
+						ecosystem: "mise",
+						files: [
+							{
+								file: "mise.toml",
+								dependencies: [
+									{
+										name: "node",
+										version: "26.3.0",
+										unsupportedReason:
+											"mise shorthand is unsupported; use a full backend identifier",
+									},
+								],
+							},
+						],
+					},
+				],
+				updatesByEcosystem: { mise: {} },
+			}),
+		);
+
+		expect(dashboard).toContain(
+			"> | `mise/node` | `mise.toml` | mise shorthand is unsupported; use a full backend identifier |",
+		);
+		expect(dashboard).toContain(
+			"| `node` | `26.3.0` | — | ℹ️ unsupported (mise shorthand is unsupported; use a full backend identifier) | `mise.toml` |",
+		);
+	});
+
 	it("renders the github-actions section with version+sha cells", () => {
 		const shaA = "a".repeat(40);
 		const shaB = "b".repeat(40);

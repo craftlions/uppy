@@ -124,7 +124,7 @@ export async function fetchVersionsMise(
  * mise-versions does not provide as the highest stable version. Tools with no
  * docs toml (or no parseable versions) are omitted.
  */
-export const datasourceMise: Datasource = {
+export const datasourceCore: Datasource = {
 	versioning: semverVersioning,
 	async lookup(refs: DependencyRef[]): Promise<Map<string, VersionInfo>> {
 		const results = await Promise.all(
@@ -150,15 +150,18 @@ export const datasourceMise: Datasource = {
 };
 
 /**
- * Look up mise-versions metadata for the given dependencies and return the
+ * Look up core mise-versions metadata for the given dependencies and return the
  * update each should receive, accounting for the minimum release age. Thin
- * ecosystem-named entry point over {@link fetchOutdated} and
- * {@link datasourceMise}; reuses the exact npm policy (`ignoreUnstable`,
+ * datasource-named entry point over {@link fetchOutdated} and
+ * {@link datasourceCore}; reuses the exact npm policy (`ignoreUnstable`,
  * `respectLatest`, held/safe states) sourced from `docs/<tool>.toml`.
  */
-export function fetchOutdatedMise(
+export function fetchOutdatedCore(
 	dependencies: Dependency[],
 	options: OutdatedOptions = {},
 ): Promise<UpdateRecord> {
-	return fetchOutdated(dependencies, datasourceMise, options);
+	return fetchOutdated(dependencies, datasourceCore, options);
 }
+
+export const datasourceMise = datasourceCore;
+export const fetchOutdatedMise = fetchOutdatedCore;

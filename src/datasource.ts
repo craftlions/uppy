@@ -150,7 +150,11 @@ export async function fetchOutdated(
 	for (const dep of dependencies) {
 		const key = dependencyKey(dep);
 		if (!refsByKey.has(key)) {
-			refsByKey.set(key, { name: dep.name, ref: dep.version, key });
+			refsByKey.set(key, {
+				name: dep.lookupName ?? dep.name,
+				ref: dep.version,
+				key,
+			});
 		}
 	}
 	if (refsByKey.size === 0) {

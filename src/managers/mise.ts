@@ -13,7 +13,6 @@ const MISE_TOML = "mise.toml";
  */
 export const miseManager: Manager = {
 	name: "mise",
-	datasource: "mise",
 	async detect(octokit, owner, repo): Promise<DependencyFile[]> {
 		const content = await fetchFileContent(octokit, owner, repo, MISE_TOML);
 		if (!content) {

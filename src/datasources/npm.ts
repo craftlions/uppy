@@ -22,6 +22,9 @@ export const datasourceNpm: Datasource = {
 	versioning: semverVersioning,
 	async lookup(refs: DependencyRef[]): Promise<Map<string, VersionInfo>> {
 		const names = refs.map((ref) => ref.name);
+		const keyByName = new Map(
+			refs.map((ref) => [ref.name, ref.key ?? ref.name]),
+		);
 		const chunks: string[][] = [];
 		for (let i = 0; i < names.length; i += BATCH_SIZE) {
 			chunks.push(names.slice(i, i + BATCH_SIZE));
@@ -43,7 +46,11 @@ export const datasourceNpm: Datasource = {
 			for (const [version, meta] of Object.entries(versionsMeta)) {
 				times[version] = meta?.time;
 			}
-			found.set(entry.name, { versions, times, latest });
+			found.set(keyByName.get(entry.name) ?? entry.name, {
+				versions,
+				times,
+				latest,
+			});
 		}
 		return found;
 	},

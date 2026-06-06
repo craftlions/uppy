@@ -1,6 +1,5 @@
 import type { WorkflowEvent } from "cloudflare:workers";
 import { WorkflowEntrypoint, type WorkflowStep } from "cloudflare:workers";
-import { fetchOutdated } from "../datasource.ts";
 import {
 	type PinAction,
 	renderDependencyDashboard,
@@ -32,6 +31,8 @@ import {
 	fetchVulnerabilityAlerts,
 	logVulnerabilityAlerts,
 } from "../vulnerability-alerts.ts";
+import { safeUpgradeBranch } from "./branches.ts";
+import { fetchUpdatesByDatasource } from "./updates.ts";
 
 type Params = { organization: string; repository: string };
 
@@ -127,14 +128,13 @@ export class UppyWorkflow extends WorkflowEntrypoint<Env, Params> {
 						organization,
 						repository,
 					);
-					const datasource = datasourceFor(manager.datasource, octokit);
-					if (!datasource) {
-						return [eco.ecosystem, {} as UpdateRecord] as const;
-					}
 					const dependencies = eco.files.flatMap((file) => file.dependencies);
-					const updates = await fetchOutdated(dependencies, datasource, {
-						minimumReleaseAgeMs: minimumReleaseAge.ms,
-					});
+					const updates = await fetchUpdatesByDatasource(
+						dependencies,
+						manager.datasource,
+						(datasourceName) => datasourceFor(datasourceName, octokit),
+						{ minimumReleaseAgeMs: minimumReleaseAge.ms },
+					);
 					return [eco.ecosystem, updates] as const;
 				}),
 			),
@@ -153,10 +153,9 @@ export class UppyWorkflow extends WorkflowEntrypoint<Env, Params> {
 				async () => {
 					const instances = await this.env.MISE_WORKFLOW.createBatch(
 						safeUpgrades.map((upgrade) => {
-							const slug = `${upgrade.ecosystem}-${upgrade.package.replaceAll("@", "").replaceAll("/", "-")}-${upgrade.target}`;
 							return {
 								id: `${event.instanceId}-mise-${nanoid()}`,
-								params: { branch: `uppy/${slug}` },
+								params: { branch: safeUpgradeBranch(upgrade) },
 							};
 						}),
 					);

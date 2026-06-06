@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	type Datasource,
+	type DependencyRef,
 	fetchOutdated,
 	type VersionInfo,
 } from "../src/datasource.ts";
@@ -15,17 +16,17 @@ const AGED = "2024-01-01T00:00:00.000Z"; // 9 days old → safe
  */
 function fakeDatasource(table: Record<string, VersionInfo>): {
 	datasource: Datasource;
-	calls: string[][];
+	calls: DependencyRef[][];
 } {
-	const calls: string[][] = [];
+	const calls: DependencyRef[][] = [];
 	const datasource: Datasource = {
 		lookup(refs) {
-			calls.push(refs.map((ref) => ref.name));
+			calls.push(refs);
 			const found = new Map<string, VersionInfo>();
-			for (const { name } of refs) {
+			for (const { name, key } of refs) {
 				const info = table[name];
 				if (info) {
-					found.set(name, info);
+					found.set(key ?? name, info);
 				}
 			}
 			return Promise.resolve(found);
@@ -53,9 +54,41 @@ describe("fetchOutdated", () => {
 			{ now: NOW },
 		);
 
-		expect(calls).toEqual([["pkg"]]);
+		expect(calls).toEqual([[{ name: "pkg", ref: "1.0.0", key: "pkg" }]]);
 		expect(updates).toEqual({
 			pkg: {
+				current: "1.0.0",
+				target: "1.1.0",
+				updateType: "minor",
+				state: "safe",
+			},
+		});
+	});
+
+	it("looks up datasource names while keying updates by display names", async () => {
+		const { datasource, calls } = fakeDatasource({
+			node: {
+				versions: ["1.0.0", "1.1.0"],
+				times: { "1.1.0": AGED },
+				latest: "1.1.0",
+			},
+		});
+
+		const updates = await fetchOutdated(
+			[
+				{
+					name: "core:node",
+					lookupName: "node",
+					version: "1.0.0",
+				},
+			],
+			datasource,
+			{ now: NOW },
+		);
+
+		expect(calls).toEqual([[{ name: "node", ref: "1.0.0", key: "core:node" }]]);
+		expect(updates).toEqual({
+			"core:node": {
 				current: "1.0.0",
 				target: "1.1.0",
 				updateType: "minor",

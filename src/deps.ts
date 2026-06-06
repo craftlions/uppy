@@ -3,6 +3,18 @@ import { valid } from "semver";
 export interface Dependency {
 	name: string;
 	/**
+	 * The datasource that resolves this dependency when it differs from the
+	 * manager's default datasource. Used by mise, whose full backend identifiers
+	 * route `core:*`, `github:*`, `aqua:*`, and `npm:*` through different sources.
+	 */
+	datasource?: string;
+	/**
+	 * The package name to pass to the datasource. When absent, {@link name} is
+	 * already the datasource name. For mise this strips the backend prefix while
+	 * keeping the full identifier visible in dashboards.
+	 */
+	lookupName?: string;
+	/**
 	 * The raw manifest spec, used as the lookup `ref` a {@link Datasource}
 	 * resolves. For npm and mise this is the version (range operators stripped);
 	 * for github-actions it is the raw `@ref` — a tag (`v4.1.0`), a coarse tag
@@ -27,6 +39,12 @@ export interface Dependency {
 	 * but it is kept for display and for rewriting the comment on a bump.
 	 */
 	comment?: string;
+	/**
+	 * Why uppy recognised this manifest entry but will not attempt to update it.
+	 * Unsupported dependencies are rendered for user awareness but excluded from
+	 * datasource lookups.
+	 */
+	unsupportedReason?: string;
 }
 
 export interface DependencyFile {
@@ -150,11 +168,37 @@ const extractMiseVersion = (rawValue: string): string => {
 	return unquote(rawValue);
 };
 
-/** Take the bare tool name from a mise key like `github:endevco/aube`. */
-const normalizeMiseName = (key: string): string => {
-	const afterSlash = key.split("/").at(-1) ?? key;
-	return afterSlash.split(":").at(-1) ?? afterSlash;
+const SUPPORTED_MISE_BACKENDS: Record<string, string> = {
+	aqua: "aqua",
+	core: "core",
+	github: "github-releases",
+	npm: "npm",
 };
+
+const PLAIN_MISE_BACKEND =
+	/^(core|github|aqua|npm):([^:[\]{}#]+(?:\/[^:[\]{}#]+)*)$/;
+
+function dependencyForMiseTool(name: string, version: string): Dependency {
+	const match = PLAIN_MISE_BACKEND.exec(name);
+	if (!match) {
+		return {
+			name,
+			version,
+			pinned: isPinnedVersion(version),
+			unsupportedReason: name.includes(":")
+				? "decorated or unsupported mise backend identity"
+				: "mise shorthand is unsupported; use a full backend identifier",
+		};
+	}
+	const [, backend, lookupName] = match;
+	return {
+		name,
+		datasource: SUPPORTED_MISE_BACKENDS[backend],
+		lookupName,
+		version,
+		pinned: isPinnedVersion(version),
+	};
+}
 
 /** Strip semver range operators from an npm version spec, e.g. `^1.2.3`. */
 const cleanNpmVersion = (version: string): string =>
@@ -168,6 +212,21 @@ const cleanNpmVersion = (version: string): string =>
  */
 const isPinnedVersion = (version: string): boolean =>
 	valid(version.trim()) !== null;
+
+function assignmentIndex(line: string): number {
+	let quote: string | null = null;
+	for (let index = 0; index < line.length; index += 1) {
+		const char = line[index];
+		if ((char === '"' || char === "'") && line[index - 1] !== "\\") {
+			quote = quote === char ? null : (quote ?? char);
+			continue;
+		}
+		if (char === "=" && quote === null) {
+			return index;
+		}
+	}
+	return -1;
+}
 
 /** Parse the `[tools]` table of a mise.toml file into dependencies. */
 export function parseMiseToml(content: string): Dependency[] {
@@ -186,13 +245,13 @@ export function parseMiseToml(content: string): Dependency[] {
 		if (!inTools) {
 			continue;
 		}
-		const eq = line.indexOf("=");
+		const eq = assignmentIndex(line);
 		if (eq === -1) {
 			continue;
 		}
-		const name = normalizeMiseName(unquote(line.slice(0, eq).trim()));
+		const name = unquote(line.slice(0, eq).trim());
 		const version = extractMiseVersion(line.slice(eq + 1).trim());
-		deps.push({ name, version, pinned: isPinnedVersion(version) });
+		deps.push(dependencyForMiseTool(name, version));
 	}
 
 	return deps;

@@ -37,32 +37,80 @@ function mockReader(files: Record<string, string>): {
 }
 
 describe("parseMiseToml", () => {
-	it("parses tools and normalizes names", () => {
+	it("parses supported full tool identifiers with datasource metadata", () => {
 		expect(parseMiseToml(MISE_TOML)).toEqual([
-			{ name: "aube", version: "1.17.1", pinned: true },
-			{ name: "node", version: "26.3.0", pinned: true },
+			{
+				name: "github:endevco/aube",
+				datasource: "github-releases",
+				lookupName: "endevco/aube",
+				version: "1.17.1",
+				pinned: true,
+			},
+			{
+				name: "core:node",
+				datasource: "core",
+				lookupName: "node",
+				version: "26.3.0",
+				pinned: true,
+			},
 		]);
 	});
 
-	it("ignores non-tool tables and comments", () => {
+	it("keeps shorthand tools as unsupported dependencies", () => {
 		const toml = `# comment\n[env]\nFOO = "bar"\n[tools]\nnode = "20.0.0"\n`;
 		expect(parseMiseToml(toml)).toEqual([
-			{ name: "node", version: "20.0.0", pinned: true },
+			{
+				name: "node",
+				version: "20.0.0",
+				pinned: true,
+				unsupportedReason:
+					"mise shorthand is unsupported; use a full backend identifier",
+			},
 		]);
 	});
 
 	it("extracts the version from an inline table", () => {
-		const toml = `[tools]\nnode = { version = "22.1.0", os = ["linux"] }\n`;
+		const toml = `[tools]\n"core:node" = { version = "22.1.0", os = ["linux"] }\n`;
 		expect(parseMiseToml(toml)).toEqual([
-			{ name: "node", version: "22.1.0", pinned: true },
+			{
+				name: "core:node",
+				datasource: "core",
+				lookupName: "node",
+				version: "22.1.0",
+				pinned: true,
+			},
 		]);
 	});
 
 	it("flags a non-exact version as not pinned", () => {
-		const toml = `[tools]\nnode = "latest"\nbun = "1.2"\n`;
+		const toml = `[tools]\n"core:node" = "latest"\n"core:bun" = "1.2"\n`;
 		expect(parseMiseToml(toml)).toEqual([
-			{ name: "node", version: "latest", pinned: false },
-			{ name: "bun", version: "1.2", pinned: false },
+			{
+				name: "core:node",
+				datasource: "core",
+				lookupName: "node",
+				version: "latest",
+				pinned: false,
+			},
+			{
+				name: "core:bun",
+				datasource: "core",
+				lookupName: "bun",
+				version: "1.2",
+				pinned: false,
+			},
+		]);
+	});
+
+	it("keeps decorated full identifiers as unsupported dependencies", () => {
+		const toml = `[tools]\n"github:endevco/aube[bin=aube]" = "1.18.0"\n`;
+		expect(parseMiseToml(toml)).toEqual([
+			{
+				name: "github:endevco/aube[bin=aube]",
+				version: "1.18.0",
+				pinned: true,
+				unsupportedReason: "decorated or unsupported mise backend identity",
+			},
 		]);
 	});
 });
@@ -116,8 +164,20 @@ describe("detectDependencies", () => {
 					{
 						file: "mise.toml",
 						dependencies: [
-							{ name: "aube", version: "1.17.1", pinned: true },
-							{ name: "node", version: "26.3.0", pinned: true },
+							{
+								name: "github:endevco/aube",
+								datasource: "github-releases",
+								lookupName: "endevco/aube",
+								version: "1.17.1",
+								pinned: true,
+							},
+							{
+								name: "core:node",
+								datasource: "core",
+								lookupName: "node",
+								version: "26.3.0",
+								pinned: true,
+							},
 						],
 					},
 				],
