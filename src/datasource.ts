@@ -74,52 +74,30 @@ export interface DependencyRef {
  * request per tool, github-tags batches one GraphQL query per repo — without the
  * resolver knowing the difference. A datasource declares the {@link Versioning}
  * it speaks; the resolver defaults to {@link semverVersioning} when none is set.
+ *
+ * A datasource may optionally implement {@link Datasource.composeStatus} to layer
+ * an adapter-specific dimension onto the version-only status the resolver computes
+ * — today only github-tags does, to add the digest-pin recommendation. The default
+ * for a datasource that omits it is the identity on the version status, so adding a
+ * new adapter (cargo, pub, gomod, …) needs no opt-in.
  */
 export interface Datasource {
 	readonly versioning?: Versioning;
 	lookup(refs: DependencyRef[]): Promise<Map<string, VersionInfo>>;
-}
-
-/**
- * Layer the github-actions digest dimension onto a version-only update status.
- *
- * For datasources without digests (npm, mise) the version status is returned
- * unchanged. For github-tags, the recommendation is always "pin to the sha of the
- * safest acceptable version": the resolved `target` when an aged update exists,
- * otherwise the current version (pinning the current version is never age-gated —
- * only advancing to a newer tag is). A dependency that is up to date *and* already
- * pinned to that sha is omitted; one that floats on a tag, or is pinned to a stale
- * sha, surfaces a `digest` recommendation even with no version change.
- */
-function composeDigestStatus(
-	info: VersionInfo,
-	current: string,
-	status: UpdateStatus | null,
-): UpdateStatus | null {
-	const hasDigests =
-		info.digests !== undefined || info.currentDigest !== undefined;
-	if (!hasDigests) {
-		return status;
-	}
-
-	const pinVersion = status?.target ?? current;
-	const targetDigest = info.digests?.[pinVersion] ?? info.currentDigest;
-	const currentDigest = info.currentDigest;
-
-	if (status) {
-		return { ...status, currentDigest, targetDigest };
-	}
-	if (targetDigest !== undefined && currentDigest !== targetDigest) {
-		return {
-			current,
-			target: current,
-			updateType: "digest",
-			state: "safe",
-			currentDigest,
-			targetDigest,
-		};
-	}
-	return null;
+	/**
+	 * Layer an adapter-specific dimension onto the version-only status the resolver
+	 * produces for one ref. Receives the {@link VersionInfo} from {@link lookup},
+	 * the resolved `current`, and the {@link UpdateStatus} the version resolver
+	 * classified (or `null` when the version is up to date). Returns the status to
+	 * record, or `null` to omit the ref (same semantics as the version resolver's
+	 * `null`). When a datasource does not implement it the resolver applies the
+	 * identity — the version status passes through unchanged.
+	 */
+	composeStatus?(
+		info: VersionInfo,
+		current: string,
+		versionStatus: UpdateStatus | null,
+	): UpdateStatus | null;
 }
 
 /**
@@ -129,7 +107,8 @@ function composeDigestStatus(
  * (so an action pinned at two different refs stays two entries, while a name that
  * is unique within a manifest set collapses as before), looks the refs up through
  * the datasource, classifies each with {@link resolveUpdateStatus} using the
- * datasource's {@link Versioning}, then layers on any digest recommendation.
+ * datasource's {@link Versioning}, then defers to the datasource's optional
+ * {@link Datasource.composeStatus} to layer on any adapter-specific dimension.
  * Dependencies that are already up to date (and, for actions, correctly pinned)
  * or have no resolvable metadata are omitted. The returned record is keyed by
  * `dependencyKey`, which consumers use to look an occurrence back up.
@@ -183,7 +162,9 @@ export async function fetchOutdated(
 			resolveOptions,
 			versioning,
 		);
-		const composed = composeDigestStatus(info, current, status);
+		const composed = datasource.composeStatus
+			? datasource.composeStatus(info, current, status)
+			: status;
 		if (composed) {
 			updates[key] = composed;
 		}
