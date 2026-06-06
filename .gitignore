@@ -14,7 +14,7 @@ apm_modules/
 .claude
 .codex
 .gemini
-.github
+.github/instructions/**
 .opencode
 opencode.json
 .vscode/mcp.json
