@@ -1,12 +1,5 @@
-import type { Dependency, UpdateRecord } from "../deps.ts";
-import type { OutdatedOptions } from "../outdated.ts";
+import type { Datasource, DependencyRef, VersionInfo } from "../datasource.ts";
 import { compare, parse } from "semver";
-import {
-	type Datasource,
-	type DependencyRef,
-	fetchOutdated,
-	type VersionInfo,
-} from "../datasource.ts";
 import { semverVersioning } from "../versioning.ts";
 
 /**
@@ -148,20 +141,3 @@ export const datasourceCore: Datasource = {
 		return found;
 	},
 };
-
-/**
- * Look up core mise-versions metadata for the given dependencies and return the
- * update each should receive, accounting for the minimum release age. Thin
- * datasource-named entry point over {@link fetchOutdated} and
- * {@link datasourceCore}; reuses the exact npm policy (`ignoreUnstable`,
- * `respectLatest`, held/safe states) sourced from `docs/<tool>.toml`.
- */
-export function fetchOutdatedCore(
-	dependencies: Dependency[],
-	options: OutdatedOptions = {},
-): Promise<UpdateRecord> {
-	return fetchOutdated(dependencies, datasourceCore, options);
-}
-
-export const datasourceMise = datasourceCore;
-export const fetchOutdatedMise = fetchOutdatedCore;

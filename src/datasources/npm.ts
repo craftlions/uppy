@@ -1,12 +1,5 @@
-import type { Dependency, UpdateRecord } from "../deps.ts";
-import type { OutdatedOptions } from "../outdated.ts";
+import type { Datasource, DependencyRef, VersionInfo } from "../datasource.ts";
 import { getVersionsBatch } from "fast-npm-meta";
-import {
-	type Datasource,
-	type DependencyRef,
-	fetchOutdated,
-	type VersionInfo,
-} from "../datasource.ts";
 import { semverVersioning } from "../versioning.ts";
 
 /** The npm.antfu.dev endpoint caps each batch lookup; chunk requests to match. */
@@ -55,15 +48,3 @@ export const datasourceNpm: Datasource = {
 		return found;
 	},
 };
-
-/**
- * Look up the npm registry metadata for the given dependencies and return the
- * update each should receive, accounting for the minimum release age. Thin
- * ecosystem-named entry point over {@link fetchOutdated} and {@link datasourceNpm}.
- */
-export function fetchOutdatedNpm(
-	dependencies: Dependency[],
-	options: OutdatedOptions = {},
-): Promise<UpdateRecord> {
-	return fetchOutdated(dependencies, datasourceNpm, options);
-}

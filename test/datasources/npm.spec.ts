@@ -1,10 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { datasourceNpm, fetchOutdatedNpm } from "../../src/datasources/npm.ts";
+import { datasourceNpm } from "../../src/datasources/npm.ts";
 
 const getVersionsBatch = vi.hoisted(() => vi.fn());
 vi.mock("fast-npm-meta", () => ({ getVersionsBatch }));
 
-const NOW = Date.parse("2024-01-10T00:00:00Z");
 const AGED = "2024-01-01T00:00:00.000Z"; // 9 days old → safe
 const FRESH = "2024-01-09T00:00:00.000Z"; // 1 day old → too fresh
 
@@ -54,75 +53,5 @@ describe("datasourceNpm.lookup", () => {
 		const found = await datasourceNpm.lookup([{ name: "ghost", ref: "1.0.0" }]);
 
 		expect(found.has("ghost")).toBe(false);
-	});
-});
-
-describe("fetchOutdatedNpm", () => {
-	it("requests publish metadata, skips errors, and classifies each update by age", async () => {
-		getVersionsBatch.mockResolvedValueOnce([
-			{
-				name: "safe-pkg",
-				versionsMeta: { "1.0.0": { time: AGED }, "1.1.0": { time: AGED } },
-				distTags: { latest: "1.1.0" },
-			},
-			{
-				name: "newer-held-pkg",
-				versionsMeta: {
-					"1.0.0": { time: AGED },
-					"1.1.0": { time: AGED },
-					"1.2.0": { time: FRESH },
-				},
-				distTags: { latest: "1.2.0" },
-			},
-			{
-				name: "held-pkg",
-				versionsMeta: { "1.0.0": { time: AGED }, "1.1.0": { time: FRESH } },
-				distTags: { latest: "1.1.0" },
-			},
-			{
-				name: "current-pkg",
-				versionsMeta: { "2.0.0": { time: AGED } },
-				distTags: { latest: "2.0.0" },
-			},
-			{ name: "ghost", status: 404, error: "Not Found" },
-		]);
-
-		const updates = await fetchOutdatedNpm(
-			[
-				{ name: "safe-pkg", version: "1.0.0" },
-				{ name: "newer-held-pkg", version: "1.0.0" },
-				{ name: "held-pkg", version: "1.0.0" },
-				{ name: "current-pkg", version: "2.0.0" },
-				{ name: "ghost", version: "1.0.0" },
-			],
-			{ now: NOW },
-		);
-
-		expect(getVersionsBatch).toHaveBeenCalledWith(
-			["safe-pkg", "newer-held-pkg", "held-pkg", "current-pkg", "ghost"],
-			{ metadata: true },
-		);
-		expect(updates).toEqual({
-			"safe-pkg": {
-				current: "1.0.0",
-				target: "1.1.0",
-				updateType: "minor",
-				state: "safe",
-			},
-			"newer-held-pkg": {
-				current: "1.0.0",
-				target: "1.1.0",
-				updateType: "minor",
-				state: "safe-newer-held",
-				heldVersion: "1.2.0",
-			},
-			"held-pkg": {
-				current: "1.0.0",
-				target: null,
-				updateType: "minor",
-				state: "held",
-				heldVersion: "1.1.0",
-			},
-		});
 	});
 });

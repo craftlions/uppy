@@ -1,9 +1,6 @@
 import type { GraphqlClient } from "../../src/datasources/github-tags.ts";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-	createAquaDatasource,
-	fetchOutdatedAqua,
-} from "../../src/datasources/aqua.ts";
+import { createAquaDatasource } from "../../src/datasources/aqua.ts";
 
 const AGED = "2024-01-01T00:00:00Z";
 
@@ -154,30 +151,6 @@ describe("createAquaDatasource", () => {
 			versions: ["v1.1.0"],
 			times: { "v1.1.0": AGED },
 		});
-	});
-
-	it("does not surface digest-only updates for github_tag registry packages", async () => {
-		stubFetch({
-			"example/tags/registry.yaml": `packages:
-  - type: http
-    repo_owner: example
-    repo_name: tags
-    version_source: github_tag
-`,
-		});
-
-		const updates = await fetchOutdatedAqua(
-			[
-				{
-					name: "aqua:example/tags",
-					lookupName: "example/tags",
-					version: "v1.1.0",
-				},
-			],
-			fakeClient(),
-		);
-
-		expect(updates).toEqual({});
 	});
 
 	it("routes aqua-renovate-config npm exceptions through npm", async () => {

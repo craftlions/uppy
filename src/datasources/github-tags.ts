@@ -1,11 +1,4 @@
-import type { Dependency, UpdateRecord } from "../deps.ts";
-import type { OutdatedOptions } from "../outdated.ts";
-import {
-	type Datasource,
-	type DependencyRef,
-	fetchOutdated,
-	type VersionInfo,
-} from "../datasource.ts";
+import type { Datasource, DependencyRef, VersionInfo } from "../datasource.ts";
 import { githubVersioning } from "../versioning.ts";
 
 /** A full 40-hex commit sha — the only ref shape uppy treats as digest-pinned. */
@@ -266,22 +259,4 @@ export function createGithubTagsDatasource(client: GraphqlClient): Datasource {
 			return found;
 		},
 	};
-}
-
-/**
- * Look up github-tags metadata for the given action dependencies and return the
- * update (version bump and/or digest pin) each should receive, accounting for the
- * minimum release age. Thin ecosystem-named entry point over {@link fetchOutdated}
- * and {@link createGithubTagsDatasource}.
- */
-export function fetchOutdatedGithubActions(
-	dependencies: Dependency[],
-	client: GraphqlClient,
-	options: OutdatedOptions = {},
-): Promise<UpdateRecord> {
-	return fetchOutdated(
-		dependencies,
-		createGithubTagsDatasource(client),
-		options,
-	);
 }

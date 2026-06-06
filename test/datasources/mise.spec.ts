@@ -1,11 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-	fetchOutdatedMise,
 	fetchVersionsMise,
 	parseVersionsTomlMise,
 } from "../../src/datasources/mise.ts";
 
-const NOW = Date.parse("2024-01-10T00:00:00Z");
 const AGED = "2024-01-01T00:00:00.000Z"; // 9 days old → safe
 const FRESH = "2024-01-09T00:00:00.000Z"; // 1 day old → too fresh
 
@@ -96,94 +94,5 @@ describe("fetchVersionsMise", () => {
 			vi.fn(() => Promise.reject(new Error("network"))),
 		);
 		await expect(fetchVersionsMise("aube")).resolves.toBeNull();
-	});
-});
-
-describe("fetchOutdatedMise", () => {
-	it("classifies each tool by minimum release age and skips unknown tools", async () => {
-		stubFetch({
-			"safe-tool": toml({ "1.0.0": AGED, "1.1.0": AGED }),
-			"newer-held-tool": toml({ "1.0.0": AGED, "1.1.0": AGED, "1.2.0": FRESH }),
-			"held-tool": toml({ "1.0.0": AGED, "1.1.0": FRESH }),
-			"current-tool": toml({ "2.0.0": AGED }),
-		});
-
-		const updates = await fetchOutdatedMise(
-			[
-				{ name: "safe-tool", version: "1.0.0" },
-				{ name: "newer-held-tool", version: "1.0.0" },
-				{ name: "held-tool", version: "1.0.0" },
-				{ name: "current-tool", version: "2.0.0" },
-				{ name: "ghost", version: "1.0.0" },
-			],
-			{ now: NOW },
-		);
-
-		expect(updates).toEqual({
-			"safe-tool": {
-				current: "1.0.0",
-				target: "1.1.0",
-				updateType: "minor",
-				state: "safe",
-			},
-			"newer-held-tool": {
-				current: "1.0.0",
-				target: "1.1.0",
-				updateType: "minor",
-				state: "safe-newer-held",
-				heldVersion: "1.2.0",
-			},
-			"held-tool": {
-				current: "1.0.0",
-				target: null,
-				updateType: "minor",
-				state: "held",
-				heldVersion: "1.1.0",
-			},
-		});
-	});
-
-	it("ignores prereleases newer than the latest stable for a stable current", async () => {
-		stubFetch({
-			tool: toml({ "1.0.0": AGED, "1.1.0": AGED, "2.0.0-rc.1": AGED }),
-		});
-
-		const updates = await fetchOutdatedMise(
-			[{ name: "tool", version: "1.0.0" }],
-			{
-				now: NOW,
-			},
-		);
-
-		expect(updates).toEqual({
-			tool: {
-				current: "1.0.0",
-				target: "1.1.0",
-				updateType: "minor",
-				state: "safe",
-			},
-		});
-	});
-
-	it("tolerates non-semver version entries when deriving the latest stable", async () => {
-		stubFetch({
-			tool: toml({ nightly: AGED, "1.0.0": AGED, "1.1.0": AGED }),
-		});
-
-		const updates = await fetchOutdatedMise(
-			[{ name: "tool", version: "1.0.0" }],
-			{
-				now: NOW,
-			},
-		);
-
-		expect(updates).toEqual({
-			tool: {
-				current: "1.0.0",
-				target: "1.1.0",
-				updateType: "minor",
-				state: "safe",
-			},
-		});
 	});
 });

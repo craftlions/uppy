@@ -1,12 +1,5 @@
-import type { Dependency, UpdateRecord } from "../deps.ts";
-import type { OutdatedOptions } from "../outdated.ts";
+import type { Datasource, DependencyRef, VersionInfo } from "../datasource.ts";
 import { parse as parseYaml } from "yaml";
-import {
-	type Datasource,
-	type DependencyRef,
-	fetchOutdated,
-	type VersionInfo,
-} from "../datasource.ts";
 import { semverVersioning } from "../versioning.ts";
 import { createGithubReleasesDatasource } from "./github-releases.ts";
 import {
@@ -183,12 +176,4 @@ export function createAquaDatasource(client: GraphqlClient): Datasource {
 			return found;
 		},
 	};
-}
-
-export function fetchOutdatedAqua(
-	dependencies: Dependency[],
-	client: GraphqlClient,
-	options: OutdatedOptions = {},
-): Promise<UpdateRecord> {
-	return fetchOutdated(dependencies, createAquaDatasource(client), options);
 }

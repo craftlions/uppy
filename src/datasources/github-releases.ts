@@ -1,12 +1,5 @@
-import type { Dependency, UpdateRecord } from "../deps.ts";
-import type { OutdatedOptions } from "../outdated.ts";
+import type { Datasource, DependencyRef, VersionInfo } from "../datasource.ts";
 import type { GraphqlClient } from "./github-tags.ts";
-import {
-	type Datasource,
-	type DependencyRef,
-	fetchOutdated,
-	type VersionInfo,
-} from "../datasource.ts";
 import { semverVersioning } from "../versioning.ts";
 
 const RELEASES_QUERY = `query($owner: String!, $name: String!) {
@@ -133,16 +126,4 @@ export function createGithubReleasesDatasource(
 			return found;
 		},
 	};
-}
-
-export function fetchOutdatedGithubReleases(
-	dependencies: Dependency[],
-	client: GraphqlClient,
-	options: OutdatedOptions = {},
-): Promise<UpdateRecord> {
-	return fetchOutdated(
-		dependencies,
-		createGithubReleasesDatasource(client),
-		options,
-	);
 }
