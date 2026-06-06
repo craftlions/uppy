@@ -1,15 +1,17 @@
 # Triage Labels
 
-Not applicable. This repo has no issue tracker (see `issue-tracker.md`), so there are no triage states to record as labels.
+The skills speak in terms of five canonical triage roles. This file maps those roles to the actual label strings used in this repo's GitHub Issues.
 
-For reference, the `triage` skill's state machine speaks in five canonical roles:
+| Label in mattpocock/skills | Label in our tracker | Meaning                                  |
+| -------------------------- | -------------------- | ---------------------------------------- |
+| `needs-triage`             | `needs-triage`       | Maintainer needs to evaluate this issue  |
+| `needs-info`               | `needs-info`         | Waiting on reporter for more information |
+| `ready-for-agent`          | `ready-for-agent`    | Fully specified, ready for an AFK agent  |
+| `ready-for-human`          | `ready-for-human`    | Requires human implementation            |
+| `wontfix`                  | `wontfix`            | Will not be actioned                     |
 
-| Role              | Meaning                                  |
-| ----------------- | ---------------------------------------- |
-| `needs-triage`    | Maintainer needs to evaluate this issue  |
-| `needs-info`      | Waiting on reporter for more information |
-| `ready-for-agent` | Fully specified, ready for an AFK agent  |
-| `ready-for-human` | Requires human implementation            |
-| `wontfix`         | Will not be actioned                     |
+When a skill mentions a role (e.g. "apply the AFK-ready triage label"), use the corresponding label string from this table.
 
-If you adopt an issue tracker later, re-run `/setup-matt-pocock-skills` (or edit this file) to map each role to the label string your tracker actually uses.
+Today only `wontfix` exists in the repo's GitHub labels (GitHub's stock label). The other four don't exist yet — the `triage` skill should create them on first use with `gh label create <name>` rather than failing.
+
+Edit the right-hand column to match whatever vocabulary you actually use.
