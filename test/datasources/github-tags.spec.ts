@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
+import { fetchOutdated } from "../../src/datasource.ts";
 import {
 	createGithubTagsDatasource,
 	type GraphqlClient,
 } from "../../src/datasources/github-tags.ts";
 
+const NOW = Date.parse("2024-01-10T00:00:00Z");
 const AGED = "2024-01-01T00:00:00.000Z"; // 9 days old → safe
+const FRESH = "2024-01-09T00:00:00.000Z"; // 1 day old → too fresh
 
 const sha = (char: string): string => char.repeat(40);
 const A = sha("a"); // v4.2.0 + the moving v4 tag
@@ -105,5 +108,109 @@ describe("createGithubTagsDatasource.lookup", () => {
 		const datasource = createGithubTagsDatasource(fakeClient({}));
 		const found = await datasource.lookup([{ name: "ghost/repo", ref: "v1" }]);
 		expect(found.has("ghost/repo")).toBe(false);
+	});
+});
+
+/**
+ * The digest-pin policy (ADR-0003) lives in the github-tags adapter's
+ * `composeStatus`, so it is asserted at the datasource boundary: a real-shaped
+ * datasource fed canned GraphQL data, run through {@link fetchOutdated}, with the
+ * composed {@link UpdateRecord} as the observable outcome. The `composeStatus`
+ * call is an internal detail of the adapter and the resolver and is never spied on.
+ */
+describe("createGithubTagsDatasource digest composition", () => {
+	const outdated = (
+		repos: Record<string, unknown>,
+		name: string,
+		ref: string,
+	) =>
+		fetchOutdated(
+			[{ name, version: ref }],
+			createGithubTagsDatasource(fakeClient(repos)),
+			{ now: NOW },
+		);
+
+	it("attaches digest fields when a version update exists", async () => {
+		// Pinned to v4.1.0's sha (B); the safe target v4.2.0 carries the sha A to pin to.
+		const updates = await outdated(
+			{
+				"actions/checkout": repo(
+					[
+						{ name: "v4.2.0", oid: A, date: AGED },
+						{ name: "v4.1.0", oid: B, date: AGED },
+					],
+					["v4.2.0", "v4.1.0"],
+				),
+			},
+			"actions/checkout",
+			B,
+		);
+
+		expect(updates["actions/checkout"]).toEqual({
+			current: "v4.1.0",
+			target: "v4.2.0",
+			updateType: "minor",
+			state: "safe",
+			currentDigest: B,
+			targetDigest: A,
+		});
+	});
+
+	it("creates a digest-only update when a floating tag has no version bump", async () => {
+		// The action floats on the moving `v4` tag; no version moves, but the sha does.
+		const updates = await outdated(
+			{ "acme/action": repo([{ name: "v4", oid: A, date: AGED }]) },
+			"acme/action",
+			"v4",
+		);
+
+		expect(updates["acme/action"]).toEqual({
+			current: "v4",
+			target: "v4",
+			updateType: "digest",
+			state: "safe",
+			targetDigest: A,
+		});
+	});
+
+	it("omits an already-pinned action when the digest is current", async () => {
+		// Pinned to v4.2.0's sha (A), which is also the latest: nothing to recommend.
+		const updates = await outdated(
+			{
+				"acme/action": repo(
+					[{ name: "v4.2.0", oid: A, date: AGED }],
+					["v4.2.0"],
+				),
+			},
+			"acme/action",
+			A,
+		);
+
+		expect(updates).toEqual({});
+	});
+
+	it("attaches digest fields to a held update", async () => {
+		// Pinned to v4.1.0's sha (B); the only newer version (v4.2.0) is still too
+		// fresh, so the recommendation holds and pins back to the current sha (B).
+		const updates = await outdated(
+			{
+				"acme/action": repo([
+					{ name: "v4.2.0", oid: A, date: FRESH },
+					{ name: "v4.1.0", oid: B, date: AGED },
+				]),
+			},
+			"acme/action",
+			B,
+		);
+
+		expect(updates["acme/action"]).toEqual({
+			current: "v4.1.0",
+			target: null,
+			updateType: "minor",
+			state: "held",
+			heldVersion: "v4.2.0",
+			currentDigest: B,
+			targetDigest: B,
+		});
 	});
 });

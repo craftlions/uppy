@@ -1,4 +1,5 @@
 import type { Datasource, DependencyRef, VersionInfo } from "../datasource.ts";
+import type { UpdateStatus } from "../deps.ts";
 import { githubVersioning } from "../versioning.ts";
 
 /** A full 40-hex commit sha — the only ref shape uppy treats as digest-pinned. */
@@ -209,6 +210,41 @@ async function fetchRepoTags(
 }
 
 /**
+ * Layer the digest-pin dimension onto a version-only update status (ADR-0003).
+ *
+ * The sha is ground truth and the recommendation is always "pin to the sha of the
+ * safest acceptable version": the resolved `target` when an aged update exists,
+ * otherwise the current version — pinning the current version is never age-gated,
+ * only advancing to a newer tag is. A dependency that is up to date *and* already
+ * pinned to that sha is omitted; one that floats on a tag, or is pinned to a stale
+ * sha, surfaces a `digest` recommendation even with no version change.
+ */
+function composeDigestStatus(
+	info: VersionInfo,
+	current: string,
+	status: UpdateStatus | null,
+): UpdateStatus | null {
+	const pinVersion = status?.target ?? current;
+	const targetDigest = info.digests?.[pinVersion] ?? info.currentDigest;
+	const currentDigest = info.currentDigest;
+
+	if (status) {
+		return { ...status, currentDigest, targetDigest };
+	}
+	if (targetDigest !== undefined && currentDigest !== targetDigest) {
+		return {
+			current,
+			target: current,
+			updateType: "digest",
+			state: "safe",
+			currentDigest,
+			targetDigest,
+		};
+	}
+	return null;
+}
+
+/**
  * The github-tags {@link Datasource}: for each `owner/repo` action it batches one
  * GraphQL query for the repository's tags (with the commit each resolves to) and
  * releases, then resolves the manifest ref to a current version/digest and a map
@@ -258,5 +294,6 @@ export function createGithubTagsDatasource(client: GraphqlClient): Datasource {
 			}
 			return found;
 		},
+		composeStatus: composeDigestStatus,
 	};
 }
