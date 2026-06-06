@@ -262,63 +262,6 @@ export async function detectDependencies(
 	return ecosystems;
 }
 
-const countDependencies = (eco: DependencyEcosystem): number =>
-	eco.files.reduce((sum, file) => sum + file.dependencies.length, 0);
-
-const UP_TO_DATE = "✅ up to date";
-const PIN = "📌 pin";
-
-/**
- * Pick the `Target` and `Update` table cells for a dependency given its update
- * status. Absent status means the dependency is up to date. The icons encode the
- * four states from {@link UpdateStatus}: a green safe update, a safe update that
- * additionally holds back a newer (still too fresh) version, and an update where
- * every available version is still within the minimum release age window.
- *
- * When `needsPin` is set the dependency carries a range the config wants pinned
- * (see Renovate's `:pinDevDependencies`): a `📌 pin` action is shown on its own
- * when otherwise up to date, or appended to whatever update is pending.
- */
-function updateCells(
-	status: UpdateStatus | undefined,
-	needsPin: boolean,
-): {
-	target: string;
-	update: string;
-} {
-	const cells = updateStatusCells(status);
-	if (needsPin) {
-		cells.update = cells.update === UP_TO_DATE ? PIN : `${cells.update} ${PIN}`;
-	}
-	return cells;
-}
-
-function updateStatusCells(status: UpdateStatus | undefined): {
-	target: string;
-	update: string;
-} {
-	if (!status) {
-		return { target: "—", update: UP_TO_DATE };
-	}
-	if (status.state === "held") {
-		return {
-			target: "—",
-			update: `⏳ ${status.updateType} held (\`${status.heldVersion}\`)`,
-		};
-	}
-	const safe = `🟢 ${status.updateType} (safe)`;
-	if (status.state === "safe-newer-held") {
-		return {
-			target: `\`${status.target}\``,
-			update: `${safe} ⏳ newer held (\`${status.heldVersion}\`)`,
-		};
-	}
-	return { target: `\`${status.target}\``, update: safe };
-}
-
-/** Ecosystems whose tables gain `Target`/`Update` columns when updates are known. */
-const UPDATABLE_ECOSYSTEMS = new Set(["npm", "mise"]);
-
 function isUpdateRecord(
 	updates: UpdateRecords,
 ): updates is Readonly<UpdateRecord> {
@@ -343,69 +286,6 @@ const updateForDependency = (
 	updates: Readonly<UpdateRecord>,
 	name: string,
 ): UpdateStatus | undefined => updates[name];
-
-/** Render a plain `Package | Version | Manifest` table for an ecosystem. */
-function renderPlainSection(eco: DependencyEcosystem): string {
-	const rows = eco.files
-		.flatMap((file) =>
-			file.dependencies.map(
-				(dep) => `| \`${dep.name}\` | \`${dep.version}\` | \`${file.file}\` |`,
-			),
-		)
-		.join("\n");
-	return `### ${eco.ecosystem} (${countDependencies(eco)})\n\n| Package | Version | Manifest |\n| --- | --- | --- |\n${rows}`;
-}
-
-/**
- * Render an ecosystem with extra `Target` and `Update` columns, flagging the
- * deps that Renovate's default policy would bump. Deps without an entry in
- * `updates` are shown as up to date.
- */
-function renderUpdatableSection(
-	eco: DependencyEcosystem,
-	updates: Readonly<UpdateRecord>,
-	pins: ReadonlySet<string>,
-): string {
-	const rows = eco.files
-		.flatMap((file) =>
-			file.dependencies.map((dep) => {
-				const { target, update } = updateCells(
-					updateForDependency(updates, dep.name),
-					pins.has(dep.name),
-				);
-				return `| \`${dep.name}\` | \`${dep.version}\` | ${target} | ${update} | \`${file.file}\` |`;
-			}),
-		)
-		.join("\n");
-	return `### ${eco.ecosystem} (${countDependencies(eco)})\n\n| Package | Current | Target | Update | Manifest |\n| --- | --- | --- | --- | --- |\n${rows}`;
-}
-
-/**
- * Render detected dependencies as a Markdown table per ecosystem. When an
- * `updates` record is supplied, the `npm` and `mise` ecosystems gain
- * `Target`/`Update` columns describing the Renovate-style bump for each
- * outdated dependency. Names in `pins` are additionally flagged with a `📌 pin`
- * action, listing dependencies the config wants pinned but that still carry a
- * range.
- */
-export function renderDependencies(
-	ecosystems: DependencyEcosystem[],
-	updates?: UpdateRecords,
-	pins: ReadonlySet<string> = new Set(),
-): string {
-	if (ecosystems.length === 0) {
-		return "";
-	}
-
-	const sections = ecosystems.map((eco) => {
-		const ecosystemUpdates = updatesForEcosystem(updates, eco.ecosystem);
-		return ecosystemUpdates && UPDATABLE_ECOSYSTEMS.has(eco.ecosystem)
-			? renderUpdatableSection(eco, ecosystemUpdates, pins)
-			: renderPlainSection(eco);
-	});
-
-	return `## Detected Dependencies\n\n${sections.join("\n\n")}`;
-}
 
 /** List every dependency whose resolved target has aged into a safe update. */
 export function listSafeUpgrades(

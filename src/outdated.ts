@@ -214,16 +214,6 @@ export function resolveUpdateStatus(
 	};
 }
 
-/**
- * Render the GitHub `[!NOTE]` callout explaining that Uppy enforced its paranoid
- * 3-day minimum release age. Shown on top of the dashboard whenever the floor
- * was forced (the configured value was missing or below 3 days).
- */
-export function renderMinimumReleaseAgeNote(): string {
-	return `> [!NOTE]
-> Uppy enforces a paranoid minimum release age of **3 days** before recommending updates, to limit exposure to supply-chain attacks on freshly published versions. Newer releases are held back (⏳) until they age past this window.`;
-}
-
 /** Options controlling the registry update check, including the age policy. */
 export interface OutdatedOptions extends ResolveOptions {
 	/**

@@ -1,10 +1,10 @@
 import type { WorkflowEvent } from "cloudflare:workers";
 import { WorkflowEntrypoint, type WorkflowStep } from "cloudflare:workers";
 import {
-	detectDependencies,
-	listSafeUpgrades,
-	renderDependencies,
-} from "../deps.ts";
+	type PinAction,
+	renderDependencyDashboard,
+} from "../dependency-dashboard.ts";
+import { detectDependencies, listSafeUpgrades } from "../deps.ts";
 import { repositoryAccessFor } from "../github.ts";
 import { nanoid } from "../ids.ts";
 import { fetchMiseOutdated } from "../mise.ts";
@@ -12,15 +12,11 @@ import {
 	fetchOsvVulnerabilityAlerts,
 	logOsvVulnerabilityAlerts,
 	type OsvVulnerabilityAlert,
-	renderOsvVulnerabilityAlerts,
 } from "../osv.ts";
-import {
-	effectiveMinimumReleaseAge,
-	fetchOutdated,
-	renderMinimumReleaseAgeNote,
-} from "../outdated.ts";
+import { effectiveMinimumReleaseAge, fetchOutdated } from "../outdated.ts";
 import {
 	dependencyDashboardEnabled,
+	dependencyTypePinned,
 	detectRenovateConfig,
 	npmMinimumReleaseAgeMs,
 	osvVulnerabilityAlertsEnabled,
@@ -30,7 +26,6 @@ import {
 	type DependabotAlert,
 	fetchVulnerabilityAlerts,
 	logVulnerabilityAlerts,
-	renderVulnerabilityAlerts,
 } from "../vulnerability-alerts.ts";
 
 type Params = { organization: string; repository: string };
@@ -160,24 +155,35 @@ export class UppyWorkflow extends WorkflowEntrypoint<Env, Params> {
 		}
 
 		if (config && dependencyDashboardEnabled(config)) {
+			const pins: PinAction[] = ecosystems.flatMap((eco) =>
+				eco.files.flatMap((file) =>
+					file.dependencies
+						.filter(
+							(dep) =>
+								dep.pinned === false &&
+								dep.depType !== undefined &&
+								dependencyTypePinned(config, dep.depType),
+						)
+						.map((dep) => ({
+							ecosystem: eco.ecosystem,
+							manifest: file.file,
+							package: dep.name,
+						})),
+				),
+			);
+
 			const dashboardMarkdown = await step.do(
 				"render-dashboard-markdown",
-				async () => {
-					const vulnerabilityAlertsMarkdown =
-						renderVulnerabilityAlerts(vulnerabilityAlerts);
-					const osvAlertsMarkdown = renderOsvVulnerabilityAlerts(osvAlerts);
-					const detected = renderDependencies(ecosystems, updatesByEcosystem);
-					const header = `This issue lists Uppy updates and detected dependencies.\n\nLast updated at ${new Date().toISOString()}`;
-					const body = detected ? `\n\n${detected}` : "";
-					const prefix = [
-						minimumReleaseAge.forced ? renderMinimumReleaseAgeNote() : "",
-						vulnerabilityAlertsMarkdown,
-						osvAlertsMarkdown,
-					]
-						.filter(Boolean)
-						.join("\n\n");
-					return prefix ? `${prefix}\n\n${header}${body}` : `${header}${body}`;
-				},
+				async () =>
+					renderDependencyDashboard({
+						updatedAt: new Date(),
+						minimumReleaseAge,
+						ecosystems,
+						updatesByEcosystem,
+						pins,
+						vulnerabilityAlerts,
+						osvAlerts,
+					}),
 			);
 
 			await step.do("sync-dependency-dashboard-issue", async () => {

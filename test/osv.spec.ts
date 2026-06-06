@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from "vitest";
 import {
 	fetchOsvVulnerabilityAlerts,
 	logOsvVulnerabilityAlerts,
-	renderOsvVulnerabilityAlerts,
 } from "../src/osv.ts";
 
 describe("fetchOsvVulnerabilityAlerts", () => {
@@ -83,29 +82,5 @@ describe("logOsvVulnerabilityAlerts", () => {
 		expect(logger.log).toHaveBeenCalledWith(
 			"OSV vulnerability found for left-pad@1.3.0: GHSA-1234, OSV-2026-1",
 		);
-	});
-});
-
-describe("renderOsvVulnerabilityAlerts", () => {
-	it("renders a GitHub warning block with OSV alerts", () => {
-		const markdown = renderOsvVulnerabilityAlerts([
-			{
-				dependency: { name: "left-pad", version: "1.3.0" },
-				vulnerabilities: [{ id: "GHSA-1234" }, { id: "OSV-2026-1" }],
-			},
-		]);
-
-		expect(markdown).toMatchInlineSnapshot(`
-      "> [!WARNING]
-      > OSV reported vulnerabilities for detected npm dependencies.
-      >
-      > | Package | Version | Vulnerabilities |
-      > | --- | --- | --- |
-      > | \`left-pad\` | \`1.3.0\` | \`GHSA-1234\`, \`OSV-2026-1\` |"
-    `);
-	});
-
-	it("returns an empty string when there are no OSV alerts", () => {
-		expect(renderOsvVulnerabilityAlerts([])).toBe("");
 	});
 });

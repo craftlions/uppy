@@ -92,28 +92,3 @@ export function logOsvVulnerabilityAlerts(
 		);
 	}
 }
-
-/** Render OSV alerts as a GitHub warning block for the Dashboard issue body. */
-export function renderOsvVulnerabilityAlerts(
-	alerts: OsvVulnerabilityAlert[],
-): string {
-	if (alerts.length === 0) {
-		return "";
-	}
-
-	const rows = alerts
-		.map((alert) => {
-			const vulnerabilityIds = alert.vulnerabilities
-				.map((vulnerability) => `\`${vulnerability.id}\``)
-				.join(", ");
-			return `> | \`${alert.dependency.name}\` | \`${alert.dependency.version}\` | ${vulnerabilityIds} |`;
-		})
-		.join("\n");
-
-	return `> [!WARNING]
-> OSV reported vulnerabilities for detected npm dependencies.
->
-> | Package | Version | Vulnerabilities |
-> | --- | --- | --- |
-${rows}`;
-}

@@ -1,9 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import { renderDependencies } from "../src/deps.ts";
 import {
 	effectiveMinimumReleaseAge,
 	fetchOutdated,
-	renderMinimumReleaseAgeNote,
 	resolveUpdate,
 	resolveUpdateStatus,
 	THREE_DAYS_MS,
@@ -201,14 +199,6 @@ describe("resolveUpdateStatus", () => {
 	});
 });
 
-describe("renderMinimumReleaseAgeNote", () => {
-	it("renders a GitHub note callout linking the discussion", () => {
-		const note = renderMinimumReleaseAgeNote();
-		expect(note).toContain("> [!NOTE]");
-		expect(note).toContain("3 days");
-	});
-});
-
 describe("fetchOutdated", () => {
 	it("requests publish metadata, skips errors, and classifies each update by age", async () => {
 		getVersionsBatch.mockResolvedValueOnce([
@@ -276,117 +266,5 @@ describe("fetchOutdated", () => {
 				heldVersion: "1.1.0",
 			},
 		});
-	});
-});
-
-describe("renderDependencies with updates", () => {
-	it("renders the four minimum-release-age states in the Update column", () => {
-		const markdown = renderDependencies(
-			[
-				{
-					ecosystem: "npm",
-					files: [
-						{
-							file: "package.json",
-							dependencies: [
-								{ name: "uptodate", version: "1.0.0" },
-								{ name: "safe", version: "1.0.0" },
-								{ name: "newer-held", version: "1.0.0" },
-								{ name: "held", version: "1.0.0" },
-							],
-						},
-					],
-				},
-			],
-			{
-				safe: {
-					current: "1.0.0",
-					target: "1.1.0",
-					updateType: "minor",
-					state: "safe",
-				},
-				"newer-held": {
-					current: "1.0.0",
-					target: "1.1.0",
-					updateType: "minor",
-					state: "safe-newer-held",
-					heldVersion: "1.2.0",
-				},
-				held: {
-					current: "1.0.0",
-					target: null,
-					updateType: "minor",
-					state: "held",
-					heldVersion: "1.1.0",
-				},
-			},
-		);
-
-		expect(markdown).toMatchInlineSnapshot(`
-      "## Detected Dependencies
-
-      ### npm (4)
-
-      | Package | Current | Target | Update | Manifest |
-      | --- | --- | --- | --- | --- |
-      | \`uptodate\` | \`1.0.0\` | — | ✅ up to date | \`package.json\` |
-      | \`safe\` | \`1.0.0\` | \`1.1.0\` | 🟢 minor (safe) | \`package.json\` |
-      | \`newer-held\` | \`1.0.0\` | \`1.1.0\` | 🟢 minor (safe) ⏳ newer held (\`1.2.0\`) | \`package.json\` |
-      | \`held\` | \`1.0.0\` | — | ⏳ minor held (\`1.1.0\`) | \`package.json\` |"
-    `);
-	});
-
-	it("gives the mise ecosystem Target/Update columns too", () => {
-		const markdown = renderDependencies(
-			[
-				{
-					ecosystem: "mise",
-					files: [
-						{
-							file: "mise.toml",
-							dependencies: [
-								{ name: "node", version: "26.3.0" },
-								{ name: "aube", version: "1.16.1" },
-							],
-						},
-					],
-				},
-			],
-			{
-				aube: {
-					current: "1.16.1",
-					target: "1.18.0",
-					updateType: "minor",
-					state: "safe",
-				},
-			},
-		);
-
-		expect(markdown).toContain(
-			"| Package | Current | Target | Update | Manifest |",
-		);
-		expect(markdown).toContain(
-			"| `aube` | `1.16.1` | `1.18.0` | 🟢 minor (safe) | `mise.toml` |",
-		);
-		expect(markdown).toContain("| `node` | `26.3.0` | — | ✅ up to date |");
-	});
-
-	it("leaves ecosystems without update support as plain tables", () => {
-		const markdown = renderDependencies(
-			[
-				{
-					ecosystem: "docker",
-					files: [
-						{
-							file: "Dockerfile",
-							dependencies: [{ name: "node", version: "26.3.0" }],
-						},
-					],
-				},
-			],
-			{},
-		);
-
-		expect(markdown).toContain("| Package | Version | Manifest |");
 	});
 });
