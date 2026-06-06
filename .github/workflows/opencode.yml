@@ -28,4 +28,4 @@ jobs:
       - name: Run OpenCode
         uses: anomalyco/opencode/github@latest
         with:
-          model: nemotron-3-ultra-free
+          model: opencode/nemotron-3-ultra-free
