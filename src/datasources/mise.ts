@@ -1,10 +1,11 @@
-import type { Dependency, UpdateRecord } from "./deps.ts";
+import type { Dependency, UpdateRecord } from "../deps.ts";
+import type { OutdatedOptions } from "../outdated.ts";
 import { compare, parse } from "semver";
 import {
-	type OutdatedOptions,
-	resolveUpdateStatus,
-	THREE_DAYS_MS,
-} from "./outdated.ts";
+	type Datasource,
+	fetchOutdated,
+	type VersionInfo,
+} from "../datasource.ts";
 
 /**
  * Where the per-tool version lists live. mise-versions publishes one
@@ -22,7 +23,7 @@ const MISE_VERSIONS_BASE =
 const VERSION_LINE = /^"([^"]+)"\s*=\s*\{[^}]*\bcreated_at\s*=\s*([^,}\s]+)/;
 
 /** The released versions of a mise tool and each one's publish timestamp. */
-export interface MiseVersions {
+export interface VersionsMise {
 	/** Every released version, in the order mise-versions lists them. */
 	versions: string[];
 	/** Maps each version to its ISO `created_at` timestamp. */
@@ -35,10 +36,10 @@ export interface MiseVersions {
  * `"1.18.0" = { created_at = 2026-06-04T17:42:42.000Z, release_url = "…" }`
  * (the `release_url` is optional — node, for instance, omits it).
  *
- * Hand-rolled to match the existing `parseMiseToml` in `./deps.ts` and to avoid
+ * Hand-rolled to match the existing `parseMiseToml` in `../deps.ts` and to avoid
  * pulling in a TOML dependency for one well-known shape.
  */
-export function parseMiseVersionsToml(content: string): MiseVersions {
+export function parseVersionsTomlMise(content: string): VersionsMise {
 	const versions: string[] = [];
 	const times: Record<string, string | undefined> = {};
 	let inVersions = false;
@@ -97,11 +98,11 @@ function latestStable(versions: string[]): string {
 /**
  * Fetch and parse the version list for a single mise tool, or `null` when the
  * tool has no `docs/<tool>.toml` (unknown tool, network error, etc.). `name` is
- * the mise registry short name produced by `normalizeMiseName` in `./deps.ts`.
+ * the mise registry short name produced by `normalizeMiseName` in `../deps.ts`.
  */
-export async function fetchMiseVersions(
+export async function fetchVersionsMise(
 	name: string,
-): Promise<MiseVersions | null> {
+): Promise<VersionsMise | null> {
 	try {
 		const response = await fetch(
 			`${MISE_VERSIONS_BASE}/${encodeURIComponent(name)}.toml`,
@@ -109,63 +110,52 @@ export async function fetchMiseVersions(
 		if (!response.ok) {
 			return null;
 		}
-		return parseMiseVersionsToml(await response.text());
+		return parseVersionsTomlMise(await response.text());
 	} catch {
 		return null;
 	}
 }
 
 /**
- * Look up mise-versions metadata for the given mise dependencies and return a
- * map of tool name to the update it should receive, accounting for the minimum
- * release age. This is the mise counterpart to `fetchOutdated` in
- * `./outdated.ts`: it reuses the same {@link resolveUpdateStatus} policy (so
- * `ignoreUnstable`, `respectLatest` and the held/safe states behave identically
- * to npm), sourcing versions and publish times from `docs/<tool>.toml` and
- * deriving the missing `latest` dist-tag as the highest stable version.
- * Dependencies that are already up to date (or fail to resolve) are omitted.
+ * The mise {@link Datasource}: looks up each tool's `docs/<tool>.toml` from
+ * mise-versions, fanning out one request per tool. Synthesizes the `latest`
+ * mise-versions does not provide as the highest stable version. Tools with no
+ * docs toml (or no parseable versions) are omitted.
  */
-export async function fetchMiseOutdated(
+export const datasourceMise: Datasource = {
+	async lookup(names: string[]): Promise<Map<string, VersionInfo>> {
+		const results = await Promise.all(
+			names.map(async (name) => ({
+				name,
+				data: await fetchVersionsMise(name),
+			})),
+		);
+
+		const found = new Map<string, VersionInfo>();
+		for (const { name, data } of results) {
+			if (!data || data.versions.length === 0) {
+				continue;
+			}
+			found.set(name, {
+				versions: data.versions,
+				times: data.times,
+				latest: latestStable(data.versions),
+			});
+		}
+		return found;
+	},
+};
+
+/**
+ * Look up mise-versions metadata for the given dependencies and return the
+ * update each should receive, accounting for the minimum release age. Thin
+ * ecosystem-named entry point over {@link fetchOutdated} and
+ * {@link datasourceMise}; reuses the exact npm policy (`ignoreUnstable`,
+ * `respectLatest`, held/safe states) sourced from `docs/<tool>.toml`.
+ */
+export function fetchOutdatedMise(
 	dependencies: Dependency[],
 	options: OutdatedOptions = {},
 ): Promise<UpdateRecord> {
-	const {
-		minimumReleaseAgeMs = THREE_DAYS_MS,
-		now = Date.now(),
-		...resolveOptions
-	} = options;
-
-	const currentByName: Record<string, string> = {};
-	for (const dep of dependencies) {
-		if (!(dep.name in currentByName)) {
-			currentByName[dep.name] = dep.version;
-		}
-	}
-
-	const names = Object.keys(currentByName);
-	const results = await Promise.all(
-		names.map(async (name) => ({ name, data: await fetchMiseVersions(name) })),
-	);
-
-	const updates: UpdateRecord = {};
-	for (const { name, data } of results) {
-		const current = currentByName[name];
-		if (!(current && data) || data.versions.length === 0) {
-			continue;
-		}
-		const status = resolveUpdateStatus(
-			current,
-			data.versions,
-			data.times,
-			latestStable(data.versions),
-			minimumReleaseAgeMs,
-			now,
-			resolveOptions,
-		);
-		if (status) {
-			updates[name] = status;
-		}
-	}
-
-	return updates;
+	return fetchOutdated(dependencies, datasourceMise, options);
 }

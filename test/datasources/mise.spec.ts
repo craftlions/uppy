@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-	fetchMiseOutdated,
-	fetchMiseVersions,
-	parseMiseVersionsToml,
-} from "../src/mise.ts";
+	fetchOutdatedMise,
+	fetchVersionsMise,
+	parseVersionsTomlMise,
+} from "../../src/datasources/mise.ts";
 
 const NOW = Date.parse("2024-01-10T00:00:00Z");
 const AGED = "2024-01-01T00:00:00.000Z"; // 9 days old → safe
@@ -39,10 +39,10 @@ afterEach(() => {
 	vi.unstubAllGlobals();
 });
 
-describe("parseMiseVersionsToml", () => {
+describe("parseVersionsTomlMise", () => {
 	it("reads versions and their created_at timestamps from the versions table", () => {
 		const content = toml({ "1.0.0": AGED, "1.1.0": FRESH });
-		expect(parseMiseVersionsToml(content)).toEqual({
+		expect(parseVersionsTomlMise(content)).toEqual({
 			versions: ["1.0.0", "1.1.0"],
 			times: { "1.0.0": AGED, "1.1.0": FRESH },
 		});
@@ -50,7 +50,7 @@ describe("parseMiseVersionsToml", () => {
 
 	it("parses entries that omit the optional release_url (e.g. node)", () => {
 		const content = `[versions]\n"26.3.0" = { created_at = ${AGED} }\n`;
-		expect(parseMiseVersionsToml(content)).toEqual({
+		expect(parseVersionsTomlMise(content)).toEqual({
 			versions: ["26.3.0"],
 			times: { "26.3.0": AGED },
 		});
@@ -58,7 +58,7 @@ describe("parseMiseVersionsToml", () => {
 
 	it("ignores comments and lines outside the versions table", () => {
 		const content = `# a comment\n[meta]\nfoo = "bar"\n[versions]\n"1.0.0" = { created_at = ${AGED} }\n`;
-		expect(parseMiseVersionsToml(content)).toEqual({
+		expect(parseVersionsTomlMise(content)).toEqual({
 			versions: ["1.0.0"],
 			times: { "1.0.0": AGED },
 		});
@@ -66,17 +66,17 @@ describe("parseMiseVersionsToml", () => {
 
 	it("skips malformed lines inside the versions table", () => {
 		const content = `[versions]\nnot a version entry\n"1.0.0" = { created_at = ${AGED} }\n`;
-		expect(parseMiseVersionsToml(content)).toEqual({
+		expect(parseVersionsTomlMise(content)).toEqual({
 			versions: ["1.0.0"],
 			times: { "1.0.0": AGED },
 		});
 	});
 });
 
-describe("fetchMiseVersions", () => {
+describe("fetchVersionsMise", () => {
 	it("fetches and parses the docs toml for a tool", async () => {
 		const fetchMock = stubFetch({ aube: toml({ "1.0.0": AGED }) });
-		await expect(fetchMiseVersions("aube")).resolves.toEqual({
+		await expect(fetchVersionsMise("aube")).resolves.toEqual({
 			versions: ["1.0.0"],
 			times: { "1.0.0": AGED },
 		});
@@ -87,7 +87,7 @@ describe("fetchMiseVersions", () => {
 
 	it("returns null when the tool has no docs toml", async () => {
 		stubFetch({});
-		await expect(fetchMiseVersions("ghost")).resolves.toBeNull();
+		await expect(fetchVersionsMise("ghost")).resolves.toBeNull();
 	});
 
 	it("returns null when the request throws", async () => {
@@ -95,11 +95,11 @@ describe("fetchMiseVersions", () => {
 			"fetch",
 			vi.fn(() => Promise.reject(new Error("network"))),
 		);
-		await expect(fetchMiseVersions("aube")).resolves.toBeNull();
+		await expect(fetchVersionsMise("aube")).resolves.toBeNull();
 	});
 });
 
-describe("fetchMiseOutdated", () => {
+describe("fetchOutdatedMise", () => {
 	it("classifies each tool by minimum release age and skips unknown tools", async () => {
 		stubFetch({
 			"safe-tool": toml({ "1.0.0": AGED, "1.1.0": AGED }),
@@ -108,7 +108,7 @@ describe("fetchMiseOutdated", () => {
 			"current-tool": toml({ "2.0.0": AGED }),
 		});
 
-		const updates = await fetchMiseOutdated(
+		const updates = await fetchOutdatedMise(
 			[
 				{ name: "safe-tool", version: "1.0.0" },
 				{ name: "newer-held-tool", version: "1.0.0" },
@@ -148,7 +148,7 @@ describe("fetchMiseOutdated", () => {
 			tool: toml({ "1.0.0": AGED, "1.1.0": AGED, "2.0.0-rc.1": AGED }),
 		});
 
-		const updates = await fetchMiseOutdated(
+		const updates = await fetchOutdatedMise(
 			[{ name: "tool", version: "1.0.0" }],
 			{
 				now: NOW,
@@ -170,7 +170,7 @@ describe("fetchMiseOutdated", () => {
 			tool: toml({ nightly: AGED, "1.0.0": AGED, "1.1.0": AGED }),
 		});
 
-		const updates = await fetchMiseOutdated(
+		const updates = await fetchOutdatedMise(
 			[{ name: "tool", version: "1.0.0" }],
 			{
 				now: NOW,

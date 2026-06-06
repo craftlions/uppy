@@ -1,5 +1,7 @@
 import type { WorkflowEvent } from "cloudflare:workers";
 import { WorkflowEntrypoint, type WorkflowStep } from "cloudflare:workers";
+import { fetchOutdatedMise } from "../datasources/mise.ts";
+import { fetchOutdatedNpm } from "../datasources/npm.ts";
 import {
 	type PinAction,
 	renderDependencyDashboard,
@@ -7,13 +9,12 @@ import {
 import { detectDependencies, listSafeUpgrades } from "../deps.ts";
 import { repositoryAccessFor } from "../github.ts";
 import { nanoid } from "../ids.ts";
-import { fetchMiseOutdated } from "../mise.ts";
 import {
 	fetchOsvVulnerabilityAlerts,
 	logOsvVulnerabilityAlerts,
 	type OsvVulnerabilityAlert,
 } from "../osv.ts";
-import { effectiveMinimumReleaseAge, fetchOutdated } from "../outdated.ts";
+import { effectiveMinimumReleaseAge } from "../outdated.ts";
 import {
 	dependencyDashboardEnabled,
 	dependencyTypePinned,
@@ -114,7 +115,7 @@ export class UppyWorkflow extends WorkflowEntrypoint<Env, Params> {
 		const updates = await Promise.all([
 			step.do("fetch-outdated-npm-dependencies", async () => {
 				const npmEcosystem = ecosystems.find((eco) => eco.ecosystem === "npm");
-				return await fetchOutdated(
+				return await fetchOutdatedNpm(
 					npmEcosystem?.files.flatMap((file) => file.dependencies) ?? [],
 					{ minimumReleaseAgeMs: minimumReleaseAge.ms },
 				);
@@ -123,7 +124,7 @@ export class UppyWorkflow extends WorkflowEntrypoint<Env, Params> {
 				const miseEcosystem = ecosystems.find(
 					(eco) => eco.ecosystem === "mise",
 				);
-				return await fetchMiseOutdated(
+				return await fetchOutdatedMise(
 					miseEcosystem?.files.flatMap((file) => file.dependencies) ?? [],
 					{ minimumReleaseAgeMs: minimumReleaseAge.ms },
 				);

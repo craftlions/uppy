@@ -1,10 +1,4 @@
-import type {
-	Dependency,
-	OutdatedInfo,
-	UpdateRecord,
-	UpdateStatus,
-} from "./deps.ts";
-import { getVersionsBatch } from "fast-npm-meta";
+import type { OutdatedInfo, UpdateStatus } from "./deps.ts";
 import { compare, diff, gt, parse, valid } from "semver";
 
 /**
@@ -28,9 +22,6 @@ export interface ResolveOptions {
 	 */
 	respectLatest?: boolean;
 }
-
-/** The npm.antfu.dev endpoint caps each batch lookup; chunk requests to match. */
-const BATCH_SIZE = 50;
 
 const isUnstable = (version: { prerelease: readonly unknown[] }): boolean =>
 	version.prerelease.length > 0;
@@ -223,67 +214,4 @@ export interface OutdatedOptions extends ResolveOptions {
 	minimumReleaseAgeMs?: number;
 	/** Current time in milliseconds; injectable for deterministic tests. */
 	now?: number;
-}
-
-/**
- * Look up the latest registry metadata (including per-version publish times) for
- * the given npm dependencies and return a map of package name to the update it
- * should receive, accounting for the minimum release age. Dependencies that are
- * already up to date (or fail to resolve) are omitted.
- */
-export async function fetchOutdated(
-	dependencies: Dependency[],
-	options: OutdatedOptions = {},
-): Promise<UpdateRecord> {
-	const {
-		minimumReleaseAgeMs = THREE_DAYS_MS,
-		now = Date.now(),
-		...resolveOptions
-	} = options;
-
-	const currentByName: Record<string, string> = {};
-	for (const dep of dependencies) {
-		if (!(dep.name in currentByName)) {
-			currentByName[dep.name] = dep.version;
-		}
-	}
-
-	const names = Object.keys(currentByName);
-	const chunks: string[][] = [];
-	for (let i = 0; i < names.length; i += BATCH_SIZE) {
-		chunks.push(names.slice(i, i + BATCH_SIZE));
-	}
-
-	const batches = await Promise.all(
-		chunks.map((chunk) => getVersionsBatch(chunk, { metadata: true })),
-	);
-
-	const updates: UpdateRecord = {};
-	for (const entry of batches.flat()) {
-		const current = currentByName[entry.name];
-		const latest = entry.distTags?.latest;
-		if (!(current && latest)) {
-			continue;
-		}
-		const versionsMeta = entry.versionsMeta ?? {};
-		const versions = Object.keys(versionsMeta);
-		const times: Record<string, string | undefined> = {};
-		for (const [version, meta] of Object.entries(versionsMeta)) {
-			times[version] = meta?.time;
-		}
-		const status = resolveUpdateStatus(
-			current,
-			versions,
-			times,
-			latest,
-			minimumReleaseAgeMs,
-			now,
-			resolveOptions,
-		);
-		if (status) {
-			updates[entry.name] = status;
-		}
-	}
-
-	return updates;
 }
