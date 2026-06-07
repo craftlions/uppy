@@ -47,6 +47,11 @@ How old a published version must be before uppy will recommend updating to it.
 uppy enforces a paranoid 3-day floor even when config asks for less.
 _Avoid_: cooldown, quarantine, age gate
 
+**Update check**:
+The decision pass that compares detected dependencies with Datasource metadata
+and produces each dependency's update status.
+_Avoid_: update plan, resolution pass
+
 **Digest pin**:
 A GitHub Action referenced by its exact commit sha with the tag kept as a
 trailing `# comment` track (`@<sha> # v4.1.0`). uppy treats the sha as
