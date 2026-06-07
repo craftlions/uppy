@@ -14,6 +14,15 @@ files). A Manager may tag different dependencies with different Datasources;
 `aqua`, or `npm`. Renovate's manager vocabulary.
 _Avoid_: ecosystem (the old fused term), parser, extractor
 
+**Manager workflow**:
+A Cloudflare Workflow class co-located with a Manager (`MiseWorkflow` beside
+`miseManager`, `NpmWorkflow` beside `npmManager`, `GithubActionsWorkflow` beside
+`githubActionsManager`), dispatched once per Safe upgrade by the orchestrator. It
+owns the Manager-specific update command, the commit message, and the full
+e2b-sandboxed clone → update → commit → push → PR cycle for that one upgrade. The
+Manager interface stays about detection; the Manager workflow is the acting half.
+_Avoid_: per-update workflow, update worker
+
 **Datasource**:
 The source of a dependency's version metadata — its released versions, publish
 times, and `latest`. Independent of any one Manager: `github-tags` resolves

@@ -1,8 +1,10 @@
 import { env } from "cloudflare:workers";
 import { createWebMiddleware } from "@octokit/webhooks";
 import { configResponse } from "./api.ts";
-import { app, repositoryAccessFor } from "./github.ts";
+import { getApp, repositoryAccessFor } from "./github.ts";
 import { nanoid } from "./ids.ts";
+
+const app = getApp();
 
 app.webhooks.on("push", async ({ id, name }) => {
 	console.log(`Received event ${name} with id ${id}`);
@@ -32,7 +34,9 @@ function isRunRequestBody(value: unknown): value is RunRequestBody {
 	);
 }
 
-export { MiseWorkflow } from "./workflows/mise.ts";
+export { GithubActionsWorkflow } from "./managers/github-actions.ts";
+export { MiseWorkflow } from "./managers/mise.ts";
+export { NpmWorkflow } from "./managers/npm.ts";
 export { UppyWorkflow } from "./workflows/uppy.ts";
 
 export default {
@@ -76,6 +80,9 @@ export default {
 					{ status: 400 },
 				);
 			}
+			console.log(
+				`Creating uppy run for ${body.organization}/${body.repository}`,
+			);
 			await env.UPPY_WORKFLOW.create({
 				id: `${body.organization}-${body.repository}-${nanoid()}`,
 				params: {

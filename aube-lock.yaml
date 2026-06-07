@@ -6,7 +6,6 @@ settings:
 
 time:
   '@biomejs/biome@2.4.16': 2026-05-27T13:41:35.255Z
-  '@cloudflare/sandbox@0.10.3': 2026-05-27T15:14:48.893Z
   '@cloudflare/vite-plugin@1.39.0': 2026-05-26T15:52:56.166Z
   '@cloudflare/vitest-pool-workers@0.16.10': 2026-05-26T15:52:56.142Z
   '@e2b/cli@2.10.3': 2026-06-03T10:49:19.107Z
@@ -19,6 +18,7 @@ time:
   '@vitest/runner@4.1.7': 2026-05-20T07:19:23.373Z
   '@vitest/snapshot@4.1.7': 2026-05-20T07:19:26.917Z
   '@vitest/ui@4.1.8': 2026-06-01T08:15:13.391Z
+  e2b@2.27.1: 2026-06-02T14:24:15.947Z
   fast-npm-meta@2.0.0: 2026-05-25T02:52:29.048Z
   nanoid@5.1.11: 2026-04-30T22:06:42.984Z
   vite@8.0.14: 2026-05-21T07:16:03.179Z
@@ -32,9 +32,6 @@ importers:
       '@biomejs/biome':
         specifier: 2.4.16
         version: 2.4.16
-      '@cloudflare/sandbox':
-        specifier: 0.10.3
-        version: 0.10.3
       '@cloudflare/vite-plugin':
         specifier: 1.39.0
         version: 1.39.0(vite@8.0.14(@types/node@25.9.1)(esbuild@0.27.3)(yaml@2.9.0))(wrangler@4.95.0)
@@ -59,6 +56,9 @@ importers:
       '@vitest/snapshot':
         specifier: ^4.1.0
         version: 4.1.7
+      e2b:
+        specifier: 2.27.1
+        version: 2.27.1(@bufbuild/protobuf@2.12.0)(@connectrpc/connect@2.0.0-rc.3(@bufbuild/protobuf@2.12.0))
       esbuild:
         specifier: ^0.27.0 || ^0.28.0
         version: 0.27.3
@@ -99,9 +99,6 @@ importers:
       '@vitest/ui':
         specifier: 4.1.8
         version: 4.1.8(vitest@4.1.7)
-      e2b:
-        specifier: 2.27.1
-        version: 2.27.1(@bufbuild/protobuf@2.12.0)(@connectrpc/connect@2.0.0-rc.3(@bufbuild/protobuf@2.12.0))
       vitest:
         specifier: 4.1.7
         version: 4.1.7(@types/node@25.9.1)(@vitest/coverage-istanbul@4.1.7)(@vitest/ui@4.1.8)(vite@8.0.14(@types/node@25.9.1)(esbuild@0.27.3)(yaml@2.9.0))
@@ -247,26 +244,9 @@ packages:
   '@bufbuild/protobuf@2.12.0':
     resolution: {integrity: sha512-B/XlCaFIP8LOwzo+bz5uFzATYokcwCKQcghqnlfwSmM5eX/qTkvDBnDPs+gXtX/RyjxJ4DRikECcPJbyALA8FA==}
 
-  '@cloudflare/containers@0.3.5':
-    resolution: {integrity: sha512-P6jYEDkw1Q9qWRr9iFBxe1fozI5HfGMY6XrNg/jROPGZykcYrrzOluUqXv+q4N8gIoRXPCqJJ1FGALbTqnYTkg==}
-
   '@cloudflare/kv-asset-handler@0.5.0':
     resolution: {integrity: sha512-jxQYkj8dSIzc0cD6cMMNdOc1UVjqSqu8BZdor5s8cGjW2I8BjODt/kWPVdY+u9zj3ms75Q5qaZgnxUad83+eAg==}
     engines: {node: '>=22.0.0'}
-
-  '@cloudflare/sandbox@0.10.3':
-    resolution: {integrity: sha512-UHAbkYpS5iB7WwOIN/+x3JC+mP0NPFcpgCXKoxCycwwfyp46Gq5eX4KffTp7WWFa4ghM04ZDkqmn9r4/959IbA==}
-    peerDependencies:
-      '@openai/agents': ^0.3.3
-      '@opencode-ai/sdk': ^1.1.40
-      '@xterm/xterm': '>=5.0.0'
-    peerDependenciesMeta:
-      '@openai/agents':
-        optional: true
-      '@opencode-ai/sdk':
-        optional: true
-      '@xterm/xterm':
-        optional: true
 
   '@cloudflare/unenv-preset@2.16.1':
     resolution: {integrity: sha512-ECxObrMfyTl5bhQf/lZCXwo5G6xX9IAUo+nDMKK4SZ8m4Jvvxp52vilxyySSWh2YTZz8+HQ07qGH/2rEom1vDw==}
@@ -1000,9 +980,6 @@ packages:
     resolution: {integrity: sha512-TkOhqze98lP+6e7SPbrBpyhTpfvqqX8VYKGn4uckrgPan4WQIHnTaUD2zZzZS18eVVDj4rHPcIZa1PGgvo1DfA==}
     engines: {node: '>= 14'}
 
-  aws4fetch@1.0.20:
-    resolution: {integrity: sha512-/djoAN709iY65ETD6LKCtyyEI04XIBP5xVvfmNxsEP0uJB5tyaGBztSryRr4HqMStr9R06PisQE7m9zDTXKu6g==}
-
   balanced-match@1.0.2:
     resolution: {integrity: sha512-3oSeUO0TMV67hN1AmbXsK4yaqU7tjiHlbxRDZOpH0KW9+CeX4bRAaX0Anxt0tx2MrpRpWwQaPwIlISEJhYU5Pw==}
 
@@ -1043,9 +1020,6 @@ packages:
 
   caniuse-lite@1.0.30001793:
     resolution: {integrity: sha512-iwSsYWaCOoh26cV8NwNRViHlrfUvYsHDfRVcbtmw0Kg6PJIZZXwMkj1442FYLBGkeUf1juAsU3DTfxW579mrPA==}
-
-  capnweb@0.8.0:
-    resolution: {integrity: sha512-BK/TuXUiyfLSKsmjojn70yN7oYG/JJzoURZ3tckjg5Zj2KcygPm0A5jyOlswK7SYB4f0Gh9tt+RZ132b80iLfA==}
 
   chai@6.2.2:
     resolution: {integrity: sha512-NUPRluOfOiTKBKvWPtSD4PhFvWCqOi0BGStNWs57X9js7XGTprSmFoz5F0tWhR4WPjNeR9jXqdC7/UpSJTnlRg==}
@@ -1238,10 +1212,6 @@ packages:
   highlight.js@10.7.3:
     resolution: {integrity: sha512-tzcUFauisWKNHaRkN4Wjl/ZA07gENAjFl3J/c480dprkGTg5EQstgaNFqBfUqCq54kZRIEcreTsAgF/m2quD7A==}
     engines: {node: '*'}
-
-  hono@4.12.23:
-    resolution: {integrity: sha512-eIaZ9qDgu7XV0pxOCrg7/WhnQ6Ivm22UcxhXx/A3dcbqbbYgBEkc6e/J/s7j2tS96zoB0S9VBdLwQNCWwUo4LA==}
-    engines: {node: '>=16.9.0'}
 
   hosted-git-info@7.0.2:
     resolution: {integrity: sha512-puUZAUKT5m8Zzvs72XWy3HtvVbTWljRE66cP60bxJzAqf2DgICo7lYTY2IHUmLnNpjYvw5bvmoHvPc0QO2a62w==}
@@ -2102,16 +2072,7 @@ snapshots:
 
   '@bufbuild/protobuf@2.12.0': {}
 
-  '@cloudflare/containers@0.3.5': {}
-
   '@cloudflare/kv-asset-handler@0.5.0': {}
-
-  '@cloudflare/sandbox@0.10.3':
-    dependencies:
-      '@cloudflare/containers': 0.3.5
-      aws4fetch: 1.0.20
-      capnweb: 0.8.0
-      hono: 4.12.23
 
   '@cloudflare/unenv-preset@2.16.1(unenv@2.0.0-rc.24)(workerd@1.20260526.1)':
     dependencies:
@@ -2708,8 +2669,6 @@ snapshots:
 
   async-listen@3.1.0: {}
 
-  aws4fetch@1.0.20: {}
-
   balanced-match@1.0.2: {}
 
   balanced-match@4.0.4: {}
@@ -2750,8 +2709,6 @@ snapshots:
   camelcase@7.0.1: {}
 
   caniuse-lite@1.0.30001793: {}
-
-  capnweb@0.8.0: {}
 
   chai@6.2.2: {}
 
@@ -2926,8 +2883,6 @@ snapshots:
   has-flag@4.0.0: {}
 
   highlight.js@10.7.3: {}
-
-  hono@4.12.23: {}
 
   hosted-git-info@7.0.2:
     dependencies:

@@ -39,6 +39,16 @@
       "name": "uppy-mise",
       "binding": "MISE_WORKFLOW",
       "class_name": "MiseWorkflow"
+    },
+    {
+      "name": "uppy-npm",
+      "binding": "NPM_WORKFLOW",
+      "class_name": "NpmWorkflow"
+    },
+    {
+      "name": "uppy-github-actions",
+      "binding": "GITHUB_ACTIONS_WORKFLOW",
+      "class_name": "GithubActionsWorkflow"
     }
   ]
 }
