@@ -1,0 +1,27 @@
+---
+import Label from "./Label.astro";
+---
+
+<section class="border-b border-neutral-950 py-20 sm:py-28">
+	<Label>05 / Fast &amp; free</Label>
+	<h2
+		class="mt-6 max-w-3xl text-4xl font-bold leading-tight tracking-tight sm:text-5xl"
+	>
+		Fast by architecture. Free under fair use.
+	</h2>
+	<div class="mt-8 grid gap-8 sm:grid-cols-2">
+		<p class="text-lg leading-relaxed text-neutral-700">
+			uppy runs on Cloudflare Workers and Workflows, at the edge. Update checks
+			fan out their Datasource lookups in parallel, and every safe upgrade runs
+			the full <span class="font-mono text-neutral-950"
+				>clone → update → commit → push → PR</span
+			> cycle inside its own isolated e2b sandbox.
+		</p>
+		<p class="text-lg leading-relaxed text-neutral-700">
+			No heavyweight runner to babysit, no queue to wait behind. When uppy
+			launches it will be <span class="font-medium text-amber-600"
+				>free under a fair-use policy</span
+			> — normal, personal, and open-source use at no cost.
+		</p>
+	</div>
+</section>

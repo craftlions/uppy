@@ -1,15 +1,28 @@
 ---
-export const prerender = true
+import ClosingCta from "../components/ClosingCta.astro";
+import FastFreeSection from "../components/FastFreeSection.astro";
+import HeroSection from "../components/HeroSection.astro";
+import ManagersSection from "../components/ManagersSection.astro";
+import ProblemSection from "../components/ProblemSection.astro";
+import RenovateSection from "../components/RenovateSection.astro";
+import SafetySection from "../components/SafetySection.astro";
+import SiteFooter from "../components/SiteFooter.astro";
+import SiteHeader from "../components/SiteHeader.astro";
+import Layout from "../layouts/Layout.astro";
+
+export const prerender = true;
 ---
 
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width" />
-    <meta name="generator" content={Astro.generator} />
-    <title>uppy</title>
-  </head>
-  <body>
-    Hello, world!
-  </body>
-</html>
+<Layout>
+	<SiteHeader />
+	<main class="mx-auto max-w-6xl px-6">
+		<HeroSection />
+		<ProblemSection />
+		<SafetySection />
+		<RenovateSection />
+		<ManagersSection />
+		<FastFreeSection />
+		<ClosingCta />
+	</main>
+	<SiteFooter />
+</Layout>

@@ -1,0 +1,47 @@
+---
+import Card from "./Card.astro";
+import Label from "./Label.astro";
+---
+
+<section id="safety" class="border-b border-neutral-950 py-20 sm:py-28">
+	<Label tone="alert">02 / Paranoid safety</Label>
+	<h2
+		class="mt-6 max-w-3xl text-4xl font-bold leading-tight tracking-tight sm:text-5xl"
+	>
+		Two rules uppy enforces no matter what your config says.
+	</h2>
+	<p class="mt-6 max-w-2xl text-lg leading-relaxed text-neutral-700">
+		Renovate makes these optional. uppy makes them non-negotiable — if your
+		config asks for less, uppy ignores it.
+	</p>
+
+	<div class="mt-12 grid gap-6 md:grid-cols-2">
+		<Card
+			kicker="Minimum release age"
+			title="A 3-day floor, always"
+			tone="alert"
+		>
+			<p>
+				uppy will not recommend a version until it has been published for at
+				least three days. Set a shorter cooldown in config and it makes no
+				difference — the paranoid floor wins. Time in the wild is the cheapest
+				safety check there is, so uppy never skips it.
+			</p>
+		</Card>
+
+		<Card
+			kicker="Digest pinning"
+			title="The sha is the ground truth"
+			tone="alert"
+		>
+			<p>
+				Every unpinned GitHub Action gets pinned to the exact commit sha its tag
+				resolves to — <code class="font-mono text-neutral-950"
+					>@&lt;sha&gt; # v4.1.0</code
+				>. The trailing comment is attacker-controllable, so uppy never trusts
+				it: it reverse-resolves the sha to a tag, because the sha is what GitHub
+				actually checks out.
+			</p>
+		</Card>
+	</div>
+</section>

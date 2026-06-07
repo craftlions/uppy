@@ -1,0 +1,28 @@
+---
+/**
+ * Monospace pill used for kickers, section numbers, and status tags.
+ *   default — ink on paper, hairline border
+ *   alert   — amber, reserved for "hold / safety" beats only
+ */
+interface Props {
+	tone?: "default" | "alert";
+	class?: string;
+}
+
+const { tone = "default", class: className = "" } = Astro.props;
+
+const looks = {
+	default: "border-neutral-950 text-neutral-950",
+	alert: "border-amber-600 text-amber-600 bg-amber-50",
+};
+---
+
+<span
+	class:list={[
+		"inline-flex items-center gap-1.5 border px-2.5 py-1 font-mono text-xs uppercase tracking-widest",
+		looks[tone],
+		className,
+	]}
+>
+	<slot />
+</span>

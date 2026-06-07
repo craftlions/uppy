@@ -1,0 +1,15 @@
+---
+import { REPO } from "../consts";
+import Button from "./Button.astro";
+---
+
+<section class="py-20 text-center sm:py-28">
+	<h2
+		class="mx-auto max-w-2xl text-4xl font-black leading-tight tracking-tight sm:text-5xl"
+	>
+		Stop updating on release day.
+	</h2>
+	<div class="mt-10 flex justify-center">
+		<Button href={REPO} variant="solid">View on GitHub ↗</Button>
+	</div>
+</section>

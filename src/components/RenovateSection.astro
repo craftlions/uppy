@@ -1,0 +1,73 @@
+---
+import CodeBlock from "./CodeBlock.astro";
+import Label from "./Label.astro";
+
+const renovateJson = `{
+  "extends": ["config:recommended"],
+  "packageRules": [
+    {
+      "matchManagers": ["npm"],
+      "matchDatasources": ["npm"]
+    }
+  ]
+}`;
+---
+
+<section class="border-b border-neutral-950 py-20 sm:py-28">
+	<Label>03 / Renovate-compatible</Label>
+	<h2
+		class="mt-6 max-w-3xl text-4xl font-bold leading-tight tracking-tight sm:text-5xl"
+	>
+		Keep the config you already wrote.
+	</h2>
+	<div class="mt-10 grid gap-12 lg:grid-cols-2 lg:items-center">
+		<div class="grid gap-6">
+			<p class="text-lg leading-relaxed text-neutral-700">
+				uppy reads your existing Renovate configuration and manifests as-is.
+				There is nothing to port and no new schema to learn — point it at a repo
+				and it speaks the vocabulary you already know.
+			</p>
+			<ul class="grid gap-3">
+				<li class="flex gap-3 text-base text-neutral-700">
+					<span class="text-amber-600" aria-hidden="true">▪</span>
+					<span
+						><strong class="text-neutral-950">Managers</strong> detect your
+						manifests — <code class="font-mono">npm</code>, <code
+							class="font-mono">mise</code
+						>, <code class="font-mono">github-actions</code>.</span
+					>
+				</li>
+				<li class="flex gap-3 text-base text-neutral-700">
+					<span class="text-amber-600" aria-hidden="true">▪</span>
+					<span
+						><strong class="text-neutral-950">Datasources</strong> resolve
+						versions — <code class="font-mono">matchDatasources</code> works the
+						way you expect.</span
+					>
+				</li>
+				<li class="flex gap-3 text-base text-neutral-700">
+					<span class="text-amber-600" aria-hidden="true">▪</span>
+					<span
+						><strong class="text-neutral-950">Versioning</strong> classifies
+						bumps with the same semver rules.</span
+					>
+				</li>
+				<li class="flex gap-3 text-base text-neutral-700">
+					<span class="text-amber-600" aria-hidden="true">▪</span>
+					<span
+						>Everything surfaces on a familiar <strong class="text-neutral-950"
+							>Dependency Dashboard</strong
+						>.</span
+					>
+				</li>
+			</ul>
+		</div>
+
+		<CodeBlock title="renovate.json">
+			<pre class="text-neutral-950">{renovateJson}</pre>
+			<p class="mt-4 font-sans text-xs text-neutral-500">
+				No migration. uppy adds its paranoid floor on top.
+			</p>
+		</CodeBlock>
+	</div>
+</section>

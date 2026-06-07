@@ -1,0 +1,27 @@
+---
+import Label from "./Label.astro";
+---
+
+<section class="border-b border-neutral-950 py-20 sm:py-28">
+	<Label>01 / Why wait</Label>
+	<h2
+		class="mt-6 max-w-3xl text-4xl font-bold leading-tight tracking-tight sm:text-5xl"
+	>
+		A version is most dangerous the day it ships.
+	</h2>
+	<div class="mt-8 grid gap-8 sm:grid-cols-2">
+		<p class="text-lg leading-relaxed text-neutral-700">
+			A hijacked publish token, a compromised maintainer, a malicious
+			post-install script — supply-chain attacks live in the first hours of a
+			release, before anyone has looked. Most update bots open the PR the moment
+			the version appears, racing you straight into the blast radius.
+		</p>
+		<p class="text-lg leading-relaxed text-neutral-700">
+			uppy refuses to. It treats <span class="font-medium text-amber-600"
+				>age as evidence</span
+			>: a release has to survive in the wild long enough for the ecosystem to
+			notice if something is wrong. Only then does it count as an update worth
+			recommending.
+		</p>
+	</div>
+</section>

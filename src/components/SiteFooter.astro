@@ -1,0 +1,21 @@
+---
+import { LICENSE_URL, REPO } from "../consts";
+---
+
+<footer class="border-t border-neutral-950">
+	<div
+		class="mx-auto flex max-w-6xl flex-col gap-4 px-6 py-8 sm:flex-row sm:items-center sm:justify-between"
+	>
+		<span class="font-mono text-sm lowercase tracking-tight">uppy</span>
+		<div
+			class="flex flex-wrap items-center gap-6 font-mono text-xs uppercase tracking-widest text-neutral-500"
+		>
+			<a href={REPO} class="no-underline hover:text-amber-600">GitHub ↗</a>
+			<a href={LICENSE_URL} class="no-underline hover:text-amber-600"
+				>MIT License</a
+			>
+			<span>Built on Cloudflare</span>
+			<span>© craftlions</span>
+		</div>
+	</div>
+</footer>

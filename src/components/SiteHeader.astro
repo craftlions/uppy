@@ -1,0 +1,31 @@
+---
+import { REPO } from "../consts";
+---
+
+<header class="border-b border-neutral-950">
+	<nav
+		class="mx-auto flex max-w-6xl items-center justify-between px-6 py-4"
+		aria-label="Primary"
+	>
+		<a
+			href="/"
+			class="font-mono text-lg font-bold lowercase tracking-tight text-neutral-950 no-underline"
+		>
+			uppy
+		</a>
+		<div class="flex items-center gap-6">
+			<a
+				href="#how"
+				class="hidden font-mono text-xs uppercase tracking-widest text-neutral-950 no-underline hover:text-amber-600 sm:inline"
+			>
+				How it works
+			</a>
+			<a
+				href={REPO}
+				class="font-mono text-xs uppercase tracking-widest text-neutral-950 no-underline hover:text-amber-600"
+			>
+				GitHub ↗
+			</a>
+		</div>
+	</nav>
+</header>
