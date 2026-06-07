@@ -1,40 +1,47 @@
 {
-  "dependencies": {
-    "@biomejs/biome": "2.4.16",
-    "@cloudflare/vite-plugin": "1.39.0",
-    "@octokit/app": "16.1.2",
-    "@octokit/core": "7.0.6",
-    "@octokit/plugin-rest-endpoint-methods": "17.0.0",
-    "@octokit/webhooks": "14.2.0",
-    "@typescript/native-preview": "7.0.0-dev.20260527.2",
-    "e2b": "2.27.1",
-    "fast-npm-meta": "2.0.0",
-    "nanoid": "5.1.11",
-    "semver": "7.8.1",
-    "vite": "8.0.14",
-    "wrangler": "4.95.0"
-  },
   "name": "uppy",
   "scripts": {
-    "dev": "vite dev",
-    "build": "vite build",
-    "deploy": "vite build && wrangler deploy",
-    "cf-typegen": "wrangler types --include-runtime --include-env --strict-vars",
-    "test": "vitest",
-    "coverage": "vitest run --coverage",
-    "typecheck": "tsgo"
+    "dev": "astro dev",
+    "check": "wrangler types --include-runtime --include-env --strict-vars --check && astro check",
+    "build": "astro build",
+    "deploy": "astro build && wrangler deploy",
+    "cf-typegen": "wrangler types --include-runtime --include-env --strict-vars"
   },
   "type": "module",
   "version": "0.0.1",
   "license": "MIT",
   "devDependencies": {
+    "@astrojs/check": "0.9.9",
+    "@astrojs/cloudflare": "14.0.0-alpha.0",
+    "@astrojs/compiler-rs": "0.2.1",
+    "@astrojs/sitemap": "3.7.3",
+    "@biomejs/biome": "2.4.16",
+    "@cloudflare/vite-plugin": "1.39.0",
     "@cloudflare/vitest-pool-workers": "0.16.10",
     "@e2b/cli": "2.10.3",
+    "@octokit/app": "16.1.2",
+    "@octokit/core": "7.0.6",
+    "@octokit/plugin-rest-endpoint-methods": "17.0.0",
+    "@octokit/webhooks": "14.2.0",
+    "@tailwindcss/vite": "4.3.0",
     "@types/node": "25.9.1",
     "@types/semver": "7.7.1",
+    "@typescript/native-preview": "7.0.0-dev.20260527.2",
     "@vitest/coverage-istanbul": "4.1.7",
     "@vitest/ui": "4.1.8",
+    "astro": "7.0.0-alpha.1",
+    "browserslist": "4.28.2",
     "e2b": "2.27.1",
-    "vitest": "4.1.7"
+    "fast-npm-meta": "2.0.0",
+    "lightningcss": "1.32.0",
+    "nanoid": "5.1.11",
+    "semver": "7.8.1",
+    "tailwindcss": "4.3.0",
+    "vite": "8.0.14",
+    "vitest": "4.1.7",
+    "wrangler": "4.95.0"
+  },
+  "overrides": {
+    "yaml": "2.9.0"
   }
 }

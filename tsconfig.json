@@ -1,13 +1,9 @@
 {
+  "extends": "astro/tsconfigs/strictest",
   "compilerOptions": {
-    "lib": ["ESNext"],
-    "noEmit": true,
-    "types": ["./worker-configuration.d.ts"],
-    "allowImportingTsExtensions": true,
-    "skipLibCheck": true,
-    "strict": true,
-    "strictNullChecks": true
+    "types": ["./worker-configuration.d.ts", "node"],
+    "allowImportingTsExtensions": true
   },
-  "include": ["worker-configuration.d.ts", "src/**/*.ts"],
-  "exclude": ["node_modules"]
+  "include": [".astro/types.d.ts", "**/*"],
+  "exclude": ["dist", ".wrangler"]
 }

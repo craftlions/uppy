@@ -2,3 +2,7 @@
 "core:node" = "26.3.0"
 "github:endevco/aube" = "1.18.0"
 "github:microsoft/apm" = "0.16.1"
+
+[settings]
+experimental = true
+paranoid = true

@@ -13,6 +13,7 @@ mise trust && mise i
 aube ci
 apm install --frozen
 apm compile
+apm compile --clean
 aubx rosie-skills install --local --agent copilot --agent claude --agent codex --agent gemini-cli --agent opencode --verbose
 ```
 

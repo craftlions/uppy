@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import handler from "@astrojs/cloudflare/entrypoints/server";
 import { createWebMiddleware } from "@octokit/webhooks";
 import { configResponse } from "./api.ts";
 import { getApp, repositoryAccessFor } from "./github.ts";
@@ -40,7 +41,7 @@ export { NpmWorkflow } from "./managers/npm.ts";
 export { UppyWorkflow } from "./workflows/uppy.ts";
 
 export default {
-	async fetch(request) {
+	async fetch(request, env, ctx) {
 		const url = new URL(request.url);
 
 		if (url.pathname === "/api/github/webhooks") {
@@ -93,7 +94,6 @@ export default {
 
 			return new Response("Created", { status: 201 });
 		}
-
-		return new Response("Not Found", { status: 404 });
+		return handler.fetch(request, env, ctx);
 	},
 } satisfies ExportedHandler<Env>;

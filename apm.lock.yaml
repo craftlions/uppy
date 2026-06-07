@@ -15,16 +15,24 @@ mcp_configs:
     registry: false
     command: aubx
 local_deployed_files:
+- .claude/rules/agent-skills.md
 - .claude/rules/cli.md
+- .claude/rules/frontend.md
 - .claude/rules/linting.md
 - .claude/rules/tests.md
+- .github/instructions/agent-skills.instructions.md
 - .github/instructions/cli.instructions.md
+- .github/instructions/frontend.instructions.md
 - .github/instructions/linting.instructions.md
 - .github/instructions/tests.instructions.md
 local_deployed_file_hashes:
+  .claude/rules/agent-skills.md: sha256:02eb7e395903d8b9d3a3238bf918f66263d083f8113e4f3ec71b69d54f47cf7c
   .claude/rules/cli.md: sha256:804da5398b0d63f18062a1d4ee4698669d49b26e5e2bdea0a66781950d27f182
+  .claude/rules/frontend.md: sha256:ce4db3cc5faf479be5030b5d556691c4ccdcb244117065f03c1253231502f779
   .claude/rules/linting.md: sha256:07ec091c84a154a8d3a9e5e1cc07b33dc779bd0be865b160e14c04dd3f4a19bb
   .claude/rules/tests.md: sha256:5d71f37e510961a1274f57ab9c4beaba907d0b346feb51bcf14f0515853471d0
+  .github/instructions/agent-skills.instructions.md: sha256:13d00120057cdb3d28a214a6b48f697e055c8713fbc7638496edd112f506aeaf
   .github/instructions/cli.instructions.md: sha256:7414e3f94b47543929dcb84e96827fa1f129002073b72d1d006c7a2b6f36f9f4
+  .github/instructions/frontend.instructions.md: sha256:13cf49b9ec52819880ce3db0af21be5cce6de1b30d0f877a43c3dc4e6a1b6b67
   .github/instructions/linting.instructions.md: sha256:4a44678b25d10f3685fb1660184753432281ad9e1692826cd8776438bd741614
   .github/instructions/tests.instructions.md: sha256:30680630fd88fb6ded7b0d157b1c2cdca9aed5350f4e756e50b5913bdeabf0f6
