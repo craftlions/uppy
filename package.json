@@ -1,13 +1,13 @@
 {
   "dependencies": {
     "@biomejs/biome": "2.4.16",
-    "@cloudflare/sandbox": "0.10.3",
     "@cloudflare/vite-plugin": "1.39.0",
     "@octokit/app": "16.1.2",
     "@octokit/core": "7.0.6",
     "@octokit/plugin-rest-endpoint-methods": "17.0.0",
     "@octokit/webhooks": "14.2.0",
     "@typescript/native-preview": "7.0.0-dev.20260527.2",
+    "e2b": "2.27.1",
     "fast-npm-meta": "2.0.0",
     "nanoid": "5.1.11",
     "semver": "7.8.1",

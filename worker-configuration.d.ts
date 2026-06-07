@@ -5,8 +5,11 @@ interface __BaseEnv_Env {
 	GITHUB_APP_ID: "3924701";
 	GITHUB_APP_WEBHOOK_SECRET: string;
 	GITHUB_APP_PRIVATE_KEY: string;
+	E2B_API_KEY: string;
 	UPPY_WORKFLOW: Workflow<Parameters<import("./src/index").UppyWorkflow['run']>[0]['payload']>;
 	MISE_WORKFLOW: Workflow<Parameters<import("./src/index").MiseWorkflow['run']>[0]['payload']>;
+	NPM_WORKFLOW: Workflow<Parameters<import("./src/index").NpmWorkflow['run']>[0]['payload']>;
+	GITHUB_ACTIONS_WORKFLOW: Workflow<Parameters<import("./src/index").GithubActionsWorkflow['run']>[0]['payload']>;
 }
 declare namespace Cloudflare {
 	interface GlobalProps {

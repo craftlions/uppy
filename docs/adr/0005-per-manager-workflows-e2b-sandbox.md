@@ -1,18 +1,64 @@
-# Per-manager workflows, e2b sandbox, force-push rebase
+# Per-Manager workflows, e2b-sandboxed upgrades
 
-Each safe upgrade runs in its own Cloudflare Workflow instance, co-located with the Manager that produced it (`MiseWorkflow` in `src/managers/mise.ts`, `NpmWorkflow` in `src/managers/npm.ts`, `GithubActionsWorkflow` in `src/managers/github-actions.ts`). The instance creates an e2b sandbox from the published template `craftlions/uppy-base`, configures the bot identity, clones the repository to `/workspace`, runs the Manager's static update command, commits with `--signoff` and a `chore(deps): ...` message, force-pushes with `--force-with-lease` to the same `uppy/<manager>-<package>-<target>` branch on re-runs, and opens or updates the PR with a structured metadata header plus an inline diff. The orchestrator at `src/workflows/uppy.ts` knows only the manager-to-binding map; the per-manager workflow owns its own sandbox lifecycle, its own GitHub auth (`GIT_USERNAME=x-access-token` + a short-lived installation token in `GIT_TOKEN`), and its own `result.json` handoff. github-actions is deferred — its workflow exists but returns early with "no update command wired up yet" until an `aube action` subcommand is available.
+uppy opens a pull request for a Safe upgrade by dispatching one **Manager
+workflow** instance per upgrade — a Cloudflare Workflow class co-located with the
+Manager it serves (`MiseWorkflow` next to `miseManager`, `NpmWorkflow` next to
+`npmManager`, `GithubActionsWorkflow` next to `githubActionsManager`). The
+orchestrator (`UppyWorkflow`) resolves the run-level context once, mints a single
+short-lived installation token, and routes each upgrade through a literal
+manager-to-binding map. A Manager missing from the map throws at the dispatch
+seam rather than being silently dropped; a Manager whose update mechanism is not
+yet wired (initially github-actions) stays on the map but is filtered out of
+dispatch, so the dashboard stays accurate without running no-op work.
+
+Each Manager workflow owns the full sandbox → commit → push → PR cycle in one
+instance. It runs inside an [e2b](https://e2b.dev) sandbox booted from the
+published template `craftlions/uppy-base` (the single source of truth for the
+template name). The worker passes the installation token to the sandbox as
+`GIT_TOKEN` (`GIT_USERNAME=x-access-token`); the bot's git identity
+(`craftlions-uppy[bot]`) is configured separately. The sandbox clones the
+repository to `/workspace`, runs the Manager's static update command
+(`mise use <tool>@<target>` for mise; the hermetic `mise exec … aube add` for
+npm, with `--dev` for devDependencies), commits with `--signoff` and a
+`chore(deps): …` subject, and force-pushes with `--force-with-lease` to the same
+`uppy/<manager>-<package>-<target>` branch so re-runs rebase rather than
+clobber and the PR number is preserved. A "no changes" outcome throws — no
+`--allow-empty` — so an "up to date" rerun never opens an empty PR. The sandbox
+is always killed in a `finally`.
+
+The sandbox writes `/workspace/result.json` (`commitSha`, `branch`, `diff`,
+`filesChanged`); the worker reads it back as the single source for the PR body — a
+structured header (Package, From, To, Manifest, Bump type) plus an inline diff and
+a link to the Dependency Dashboard issue. The closed-PR short-circuit lives inside
+the Manager workflow (in a `step.do`, so it retries): a closed PR for the branch
+returns `"no-op"`, an open PR is updated, and the absence of a PR creates one.
 
 ## Considered Options
 
-- **Cloudflare Sandbox (`@cloudflare/sandbox`)** — already a dependency, no new external service. Rejected in favour of e2b because the user's roadmap points at e2b and the surrounding tooling (templates, observability, multi-language) is broader; the swap is a `wrangler.jsonc` change plus an import swap, so the cost of being wrong is small.
-- **Generic `UpgradeWorkflow` instead of per-manager classes** — fewer `wrangler.jsonc` entries, one shared retry timeline. Rejected because each Manager's failure mode is observable independently in the Cloudflare dashboard, and the per-manager file layout lets the update-command knowledge live next to the detection knowledge.
-- **Skip-on-conflict instead of force-push rebase** — refuse to push when the branch already has commits, open a new branch. Rejected because it produces PR spam and breaks the `:rebaseStalePrs` default the user wants.
+- **`@cloudflare/sandbox`** — rejected and removed. The Cloudflare Sandbox path
+  was abandoned; e2b is the only sandbox surface, a single dependency.
+- **One shared update workflow keyed on a `manager` string** — rejected. A single
+  binding makes a mise, npm, and github-actions update indistinguishable to the
+  dispatcher and to the observability timeline. Per-Manager bindings
+  (`uppy-mise`, `uppy-npm`, `uppy-github-actions`) give each Manager its own
+  timeline and let the update command, commit message, and lifecycle live next to
+  the Manager's detection logic.
+- **A long-lived or per-child token** — rejected. The orchestrator mints one
+  short-lived installation token per run and threads it to every child, so the
+  audit trail is per-installation and the credentials do not outlive the run.
 
 ## Consequences
 
-- `wrangler.jsonc` gains `uppy-npm` and `uppy-github-actions` workflow bindings; the `MISE_WORKFLOW` binding stays (renamed if needed for consistency).
-- `package.json` gains `e2b` and drops `@cloudflare/sandbox`; the commented `SANDBOX_TRANSPORT` in `wrangler.jsonc` is removed.
-- The e2b template `craftlions/uppy-base` is a separate artefact (Dockerfile + `e2b template build`) maintained outside the worker source. The template name is the single source of truth in `src/workflows/sandbox.ts`.
-- The closed-PR short-circuit stays inside the per-manager workflow (not the orchestrator) so it can use `step.do` retries. Branches with a closed PR are no-ops; everything else force-pushes to the same branch and `pulls.update`s the existing PR or `pulls.create`s a new one.
-- Empty commits fail loudly: the e2b SDK's `sandbox.git.commit` does not pass `--allow-empty`, so a "no changes" outcome surfaces as a workflow failure rather than a stale empty PR.
-- `result.json` at `/workspace/result.json` is the sandbox-to-worker handoff. The schema is `{ commitSha, branch, diff, filesChanged }`; the worker reads it via `sandbox.files.read` and uses it to compose the PR body and the dashboard update.
+- Adding a Manager is a one-line change to the dispatch map plus a co-located
+  workflow class and a `wrangler.jsonc` binding.
+- `E2B_API_KEY` is a new Cloudflare secret (not a `vars` entry), because the key
+  is sensitive and must not live in the worker source.
+- The Manager interface stays focused on detection; the per-Manager workflow is a
+  separate concern in the same module.
+- The github-actions workflow is a deferred stub returning `"no-op"` until an
+  `aube action` subcommand exists; until then the orchestrator never dispatches
+  it.
+- Transient failures (network blips, sandbox spin-up timeouts) ride Cloudflare's
+  default `step.do` retries; permanent failures (a non-zero update command, an
+  empty diff) surface loudly in the workflow dashboard. There is no separate
+  persistence layer for reporting.

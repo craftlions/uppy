@@ -4,8 +4,12 @@ import {
 	type PinAction,
 	renderDependencyDashboard,
 } from "../dependency-dashboard.ts";
-import { listSafeUpgrades, type UpdateRecord } from "../deps.ts";
-import { repositoryAccessFor } from "../github.ts";
+import {
+	listSafeUpgrades,
+	type SafeUpgrade,
+	type UpdateRecord,
+} from "../deps.ts";
+import { getApp, repositoryAccessFor } from "../github.ts";
 import { nanoid } from "../ids.ts";
 import {
 	datasourceFor,
@@ -32,7 +36,8 @@ import {
 	fetchVulnerabilityAlerts,
 	logVulnerabilityAlerts,
 } from "../vulnerability-alerts.ts";
-import { safeUpgradeBranch } from "./branches.ts";
+import { DEFERRED_MANAGERS, managerWorkflowBinding } from "./dispatch.ts";
+import { mintInstallationToken, type UpgradeParams } from "./sandbox.ts";
 
 type Params = { organization: string; repository: string };
 
@@ -148,20 +153,59 @@ export class UppyWorkflow extends WorkflowEntrypoint<Env, Params> {
 			return listSafeUpgrades(managerDependencies, updatesByManager);
 		});
 
+		// Validate every Manager (deferred ones included) maps to a binding, so a
+		// typo or a new Manager surfaces here rather than being silently dropped.
+		for (const upgrade of safeUpgrades) {
+			managerWorkflowBinding(upgrade.manager);
+		}
+		const dispatchable = safeUpgrades.filter(
+			(upgrade) => !DEFERRED_MANAGERS.has(upgrade.manager),
+		);
+
 		let safeUpgradesDispatched = 0;
-		if (safeUpgrades.length > 0) {
+		if (dispatchable.length > 0) {
 			safeUpgradesDispatched = await step.do(
 				"dispatch-safe-upgrade-workflows",
 				async () => {
-					const instances = await this.env.MISE_WORKFLOW.createBatch(
-						safeUpgrades.map((upgrade) => {
-							return {
-								id: `${event.instanceId}-mise-${nanoid()}`,
-								params: { branch: safeUpgradeBranch(upgrade) },
-							};
-						}),
+					// One short-lived installation token per run, shared by every child
+					// Manager workflow so the run never re-mints.
+					const { defaultBranch, installationId } = await repositoryAccessFor(
+						organization,
+						repository,
 					);
-					return instances.length;
+					const installationToken = await mintInstallationToken(
+						getApp(),
+						installationId,
+					);
+					const runContext = {
+						organization,
+						repository,
+						defaultBranch,
+						installationId,
+						installationToken,
+					};
+
+					// Group by binding so each Manager workflow gets one createBatch.
+					const byBinding = new Map<keyof Env, SafeUpgrade[]>();
+					for (const upgrade of dispatchable) {
+						const binding = managerWorkflowBinding(upgrade.manager);
+						const group = byBinding.get(binding) ?? [];
+						group.push(upgrade);
+						byBinding.set(binding, group);
+					}
+
+					let dispatched = 0;
+					for (const [binding, upgrades] of byBinding) {
+						const workflow = this.env[binding] as Workflow<UpgradeParams>;
+						const instances = await workflow.createBatch(
+							upgrades.map((upgrade) => ({
+								id: `${event.instanceId}-${upgrade.manager}-${nanoid()}`,
+								params: { ...runContext, upgrade },
+							})),
+						);
+						dispatched += instances.length;
+					}
+					return dispatched;
 				},
 			);
 		}

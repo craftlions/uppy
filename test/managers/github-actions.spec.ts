@@ -1,6 +1,8 @@
 import type { ContentReader } from "../../src/deps.ts";
+import type { UpgradeParams } from "../../src/workflows/sandbox.ts";
 import { describe, expect, it, vi } from "vitest";
 import {
+	GithubActionsWorkflow,
 	githubActionsManager,
 	parseWorkflowUses,
 } from "../../src/managers/github-actions.ts";
@@ -135,5 +137,19 @@ describe("githubActionsManager.detect", () => {
 		await expect(
 			githubActionsManager.detect(octokit, "acme", "repo"),
 		).resolves.toEqual([]);
+	});
+});
+
+describe("GithubActionsWorkflow", () => {
+	it("is a deferred stub that returns no-op without touching a sandbox", async () => {
+		const step = { do: vi.fn() };
+		const event = { payload: {} as UpgradeParams } as never;
+		// Call the method off the prototype to skip the WorkflowEntrypoint ctor,
+		// which the stub's body never depends on.
+		const run = GithubActionsWorkflow.prototype.run;
+		await expect(
+			run.call({} as GithubActionsWorkflow, event, step as never),
+		).resolves.toBe("no-op");
+		expect(step.do).not.toHaveBeenCalled();
 	});
 });

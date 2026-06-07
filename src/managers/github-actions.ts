@@ -1,4 +1,7 @@
+import type { WorkflowEvent } from "cloudflare:workers";
 import type { Manager } from "../manager.ts";
+import type { UpgradeParams } from "../workflows/sandbox.ts";
+import { WorkflowEntrypoint, type WorkflowStep } from "cloudflare:workers";
 import {
 	type ContentReader,
 	type Dependency,
@@ -109,3 +112,17 @@ export const githubActionsManager: Manager = {
 		return files.filter((file) => file.dependencies.length > 0);
 	},
 };
+
+/**
+ * The github-actions Manager workflow (see CONTEXT.md, "Manager workflow"): a
+ * deferred stub. It returns `"no-op"` until an `aube action` subcommand exists to
+ * update a `uses:` ref; the orchestrator skips dispatching it in the meantime.
+ */
+export class GithubActionsWorkflow extends WorkflowEntrypoint<
+	Env,
+	UpgradeParams
+> {
+	async run(_event: WorkflowEvent<UpgradeParams>, _step: WorkflowStep) {
+		return "no-op";
+	}
+}
