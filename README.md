@@ -2,15 +2,24 @@
 
 ## Commands
 
+### Preparation
 ```shell
 mise upgrade --interactive --bump --local
-mise i
+```
+
+### Setup
+```shell
+mise trust && mise i
 aube ci
 apm install --frozen
 apm compile
 aubx rosie-skills install --local --agent copilot --agent claude --agent codex --agent gemini-cli --agent opencode --verbose
-aubr wrangler types
+```
 
+## Others
+
+```shell
+aubr wrangler types
 apm outdated
 apm update
 apm audit --ci
