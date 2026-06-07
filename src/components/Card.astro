@@ -4,26 +4,44 @@ import Label from "./Label.astro";
 /**
  * Bordered editorial card. Optional monospace kicker label at the top,
  * a heading, then free body content via the default slot.
- * `alert` switches the kicker to amber for safety beats.
+ *   tone="alert" — amber kicker, for safety beats (solid border).
+ *   upcoming     — dashed neutral border + a "COMING" pill, for roadmap items.
  */
 interface Props {
 	kicker?: string;
 	title: string;
 	tone?: "default" | "alert";
+	upcoming?: boolean;
 	class?: string;
 }
 
-const { kicker, title, tone = "default", class: className = "" } = Astro.props;
+const {
+	kicker,
+	title,
+	tone = "default",
+	upcoming = false,
+	class: className = "",
+} = Astro.props;
+
+const border = upcoming
+	? "border border-dashed border-neutral-400"
+	: "border border-neutral-950";
 ---
 
 <article
 	class:list={[
-		"grid content-start gap-4 border border-neutral-950 p-6 sm:p-8",
-		tone === "alert" ? "bg-amber-50" : "",
+		"grid content-start gap-4 p-6 sm:p-8",
+		border,
+		tone === "alert" && !upcoming ? "bg-amber-50" : "",
 		className,
 	]}
 >
-	{kicker && <Label tone={tone}>{kicker}</Label>}
+	{(kicker || upcoming) && (
+			<div class="flex flex-wrap items-center gap-2">
+				{kicker && <Label tone={tone}>{kicker}</Label>}
+				{upcoming && <Label>Coming</Label>}
+			</div>
+		)}
 	<h3 class="text-xl font-bold tracking-tight sm:text-2xl">{title}</h3>
 	<div class="text-base leading-relaxed text-neutral-700">
 		<slot />

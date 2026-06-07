@@ -1,0 +1,45 @@
+---
+import Card from "./Card.astro";
+import Label from "./Label.astro";
+---
+
+<section class="border-b border-neutral-950 py-20 sm:py-28">
+	<Label>05 / Smarter updates</Label>
+	<h2
+		class="mt-6 max-w-3xl text-4xl font-bold leading-tight tracking-tight sm:text-5xl"
+	>
+		Updates that arrive pre-triaged.
+	</h2>
+	<p class="mt-6 max-w-2xl text-lg leading-relaxed text-neutral-700">
+		Paranoia decides what is safe to update. Next, uppy uses AI to make the safe
+		updates easier to act on — without ever taking the human out of the loop.
+	</p>
+
+	<div class="mt-12 grid gap-6 md:grid-cols-3">
+		<Card kicker="Summaries" title="Knows what changed" upcoming>
+			<p>
+				AI distills the changelog, release notes, and commits into a short,
+				honest summary of what an update actually does — so you are not reading
+				upstream history yourself.
+			</p>
+		</Card>
+
+		<Card kicker="Relevance" title="Sorted by what matters to you" upcoming>
+			<p>
+				AI reads what your project <em>is</em> and ranks the queue accordingly.
+				In an Astro-on-Cloudflare app, an
+				<code class="font-mono text-neutral-950">astro</code>
+				or Cloudflare bump outranks a dev-only CLI — urgent and central first,
+				trivial last.
+			</p>
+		</Card>
+
+		<Card kicker="Codemods" title="Fixes breaks before you look" upcoming>
+			<p>
+				When an update would break your code, AI attempts the fix on the PR
+				branch so it builds — and tells you what it could not. A human always
+				reviews and merges; uppy never merges on its own.
+			</p>
+		</Card>
+	</div>
+</section>

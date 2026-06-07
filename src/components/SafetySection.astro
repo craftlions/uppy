@@ -36,11 +36,45 @@ import Label from "./Label.astro";
 		>
 			<p>
 				Every unpinned GitHub Action gets pinned to the exact commit sha its tag
-				resolves to — <code class="font-mono text-neutral-950"
-					>@&lt;sha&gt; # v4.1.0</code
-				>. The trailing comment is attacker-controllable, so uppy never trusts
-				it: it reverse-resolves the sha to a tag, because the sha is what GitHub
+				resolves to —
+				<code class="font-mono text-neutral-950">@&lt;sha&gt; # v4.1.0</code>.
+				The trailing comment is attacker-controllable, so uppy never trusts it:
+				it reverse-resolves the sha to a tag, because the sha is what GitHub
 				actually checks out.
+			</p>
+		</Card>
+	</div>
+
+	<!-- vulnerability scanning sub-block: one shipped, two upcoming -->
+	<h3 class="mt-20 max-w-3xl text-2xl font-bold tracking-tight sm:text-3xl">
+		And it watches for known vulnerabilities.
+	</h3>
+	<p class="mt-4 max-w-2xl text-lg leading-relaxed text-neutral-700">
+		Age and pinning guard against the unknown. Advisories cover the known —
+		surfaced right on the Dependency Dashboard, with more on the way.
+	</p>
+
+	<div class="mt-10 grid gap-6 md:grid-cols-3">
+		<Card kicker="Available now" title="OSV + GitHub alerts">
+			<p>
+				uppy queries the OSV database for your npm dependencies and reads GitHub
+				and Dependabot security advisories, flagging every affected package
+				directly on the Dependency Dashboard.
+			</p>
+		</Card>
+
+		<Card kicker="Advisories" title="Snyk & more sources" upcoming>
+			<p>
+				More advisory feeds — Snyk and others — layered on top of OSV and
+				GitHub, so a vulnerability flagged anywhere gets caught here.
+			</p>
+		</Card>
+
+		<Card kicker="AI threat scan" title="Reads the source diff" upcoming>
+			<p>
+				AI reads the actual code changes between your installed version and the
+				proposed one, flagging suspicious additions — new network calls,
+				obfuscation, install scripts — before the update reaches you.
 			</p>
 		</Card>
 	</div>

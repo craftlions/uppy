@@ -74,6 +74,15 @@ Distinct from the npm range pin (`:pinDevDependencies`), which exacts a range li
 `^1.2.3` and involves no sha.
 _Avoid_: pin (ambiguous with the range pin), lock, freeze
 
+**Vulnerability alert**:
+A known-vulnerability advisory affecting a detected dependency, drawn from
+advisory sources (OSV and GitHub/Dependabot) and surfaced on the Dependency
+Dashboard for user awareness. Orthogonal to a Datasource, which supplies version
+metadata, not security advisories — a dependency can be perfectly up to date and
+still carry a Vulnerability alert. Renovate's vulnerability-alert vocabulary.
+_Avoid_: Datasource (versions, not advisories), CVE (one identifier scheme among
+several), security warning
+
 **Manager workflow**:
 A Cloudflare Workflow class co-located with a Manager (`MiseWorkflow` in
 `src/managers/mise.ts`, etc.), dispatched once per safe upgrade of that

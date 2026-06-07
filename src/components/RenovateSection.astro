@@ -1,4 +1,5 @@
 ---
+import Card from "./Card.astro";
 import CodeBlock from "./CodeBlock.astro";
 import Label from "./Label.astro";
 
@@ -31,31 +32,33 @@ const renovateJson = `{
 				<li class="flex gap-3 text-base text-neutral-700">
 					<span class="text-amber-600" aria-hidden="true">▪</span>
 					<span
-						><strong class="text-neutral-950">Managers</strong> detect your
-						manifests — <code class="font-mono">npm</code>, <code
-							class="font-mono">mise</code
-						>, <code class="font-mono">github-actions</code>.</span
+						><strong class="text-neutral-950">Managers</strong>
+						detect your manifests — <code class="font-mono">npm</code>,
+						<code class="font-mono">mise</code>,
+						<code class="font-mono">github-actions</code>.</span
 					>
 				</li>
 				<li class="flex gap-3 text-base text-neutral-700">
 					<span class="text-amber-600" aria-hidden="true">▪</span>
 					<span
-						><strong class="text-neutral-950">Datasources</strong> resolve
-						versions — <code class="font-mono">matchDatasources</code> works the
-						way you expect.</span
+						><strong class="text-neutral-950">Datasources</strong>
+						resolve versions —
+						<code class="font-mono">matchDatasources</code>
+						works the way you expect.</span
 					>
 				</li>
 				<li class="flex gap-3 text-base text-neutral-700">
 					<span class="text-amber-600" aria-hidden="true">▪</span>
 					<span
-						><strong class="text-neutral-950">Versioning</strong> classifies
-						bumps with the same semver rules.</span
+						><strong class="text-neutral-950">Versioning</strong>
+						classifies bumps with the same semver rules.</span
 					>
 				</li>
 				<li class="flex gap-3 text-base text-neutral-700">
 					<span class="text-amber-600" aria-hidden="true">▪</span>
 					<span
-						>Everything surfaces on a familiar <strong class="text-neutral-950"
+						>Everything surfaces on a familiar
+						<strong class="text-neutral-950"
 							>Dependency Dashboard</strong
 						>.</span
 					>
@@ -70,4 +73,19 @@ const renovateJson = `{
 			</p>
 		</CodeBlock>
 	</div>
+
+	<Card
+		kicker="uppy config"
+		title="Or graduate to uppy.jsonc"
+		upcoming
+		class="mt-10"
+	>
+		<p class="max-w-3xl">
+			Stay on <code class="font-mono text-neutral-950">renovate.json</code> as
+			long as you like — uppy reads everything it supports. When you want less
+			boilerplate and paranoid defaults built in, migrate to a native
+			<code class="font-mono text-neutral-950">uppy.jsonc</code>. Once you do,
+			uppy reads it instead and your Renovate config steps aside.
+		</p>
+	</Card>
 </section>

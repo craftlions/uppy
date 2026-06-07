@@ -17,10 +17,12 @@ const base =
 	"inline-flex items-center gap-2 px-5 py-3 font-mono text-sm font-medium uppercase tracking-wider no-underline transition-colors";
 const looks = {
 	solid: "bg-neutral-950 text-white hover:bg-amber-500 hover:text-neutral-950",
-	ghost: "border border-neutral-950 text-neutral-950 hover:bg-neutral-950 hover:text-white",
+	ghost:
+		"border border-neutral-950 text-neutral-950 hover:bg-neutral-950 hover:text-white",
 };
 ---
 
+<!-- biome-ignore lint/a11y/useAnchorContent: anchor text is always provided by the caller via <slot /> -->
 <a href={href} class:list={[base, looks[variant], className]}>
 	<slot />
 </a>

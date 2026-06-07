@@ -10,25 +10,22 @@ import Label from "./Label.astro";
 	<h1
 		class="mt-6 text-6xl font-black leading-[0.92] tracking-tighter sm:text-8xl"
 	>
-		Paranoid<br />dependency<br />updates<span class="text-amber-600">.</span>
+		Paranoid<br>dependency<br>updates<span class="text-amber-600">.</span>
 	</h1>
 	<p class="mt-8 max-w-xl text-lg leading-relaxed text-neutral-700 sm:text-xl">
 		A Renovate-compatible bot that waits until an update has aged into safety —
-		then opens the PR. Keep your <code class="font-mono text-neutral-950"
-			>renovate.json</code
-		>, swap the bot.
+		then opens the PR. Keep your
+		<code class="font-mono text-neutral-950">renovate.json</code>, swap the bot.
 	</p>
 	<div class="mt-10 flex flex-wrap items-center gap-4">
 		<Button href={REPO} variant="solid">View on GitHub ↗</Button>
 		<Button href="#safety" variant="ghost">Why paranoid?</Button>
 	</div>
 
-	<CodeBlock
-		title="Dependency Dashboard"
-		meta="craftlions/uppy"
-		class="mt-16"
-	>
-		<pre class="text-neutral-950"><span class="text-neutral-500"># Detected updates</span>
+	<CodeBlock title="Dependency Dashboard" meta="craftlions/uppy" class="mt-16">
+		<pre
+			class="text-neutral-950"
+		><span class="text-neutral-500"># Detected updates</span>
 <span class="text-amber-600">[ ]</span>  npm  node             20.11.0 → 20.11.1   <span class="text-amber-600">held 2d · aging</span>
 <span class="text-neutral-950">[x]</span>  mise aqua:aws/aws-cli  2.15.0 → 2.15.4    safe · 3d ✓ PR #42
 <span class="text-neutral-950">[x]</span>  gha  actions/checkout  @&lt;sha&gt; <span class="text-neutral-500"># v4.1.0</span>   pinned ✓</pre>
