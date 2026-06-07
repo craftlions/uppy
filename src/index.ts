@@ -80,6 +80,9 @@ export default {
 					{ status: 400 },
 				);
 			}
+			console.log(
+				`Creating uppy run for ${body.organization}/${body.repository}`,
+			);
 			await env.UPPY_WORKFLOW.create({
 				id: `${body.organization}-${body.repository}-${nanoid()}`,
 				params: {

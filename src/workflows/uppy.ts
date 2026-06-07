@@ -1,4 +1,5 @@
 import type { WorkflowEvent } from "cloudflare:workers";
+import type { UpgradeParams } from "./sandbox.ts";
 import { WorkflowEntrypoint, type WorkflowStep } from "cloudflare:workers";
 import {
 	type PinAction,
@@ -9,7 +10,7 @@ import {
 	type SafeUpgrade,
 	type UpdateRecord,
 } from "../deps.ts";
-import { getApp, repositoryAccessFor } from "../github.ts";
+import { repositoryAccessFor } from "../github.ts";
 import { nanoid } from "../ids.ts";
 import {
 	datasourceFor,
@@ -37,7 +38,6 @@ import {
 	logVulnerabilityAlerts,
 } from "../vulnerability-alerts.ts";
 import { DEFERRED_MANAGERS, managerWorkflowBinding } from "./dispatch.ts";
-import { mintInstallationToken, type UpgradeParams } from "./sandbox.ts";
 
 type Params = { organization: string; repository: string };
 
@@ -167,22 +167,18 @@ export class UppyWorkflow extends WorkflowEntrypoint<Env, Params> {
 			safeUpgradesDispatched = await step.do(
 				"dispatch-safe-upgrade-workflows",
 				async () => {
-					// One short-lived installation token per run, shared by every child
-					// Manager workflow so the run never re-mints.
 					const { defaultBranch, installationId } = await repositoryAccessFor(
 						organization,
 						repository,
 					);
-					const installationToken = await mintInstallationToken(
-						getApp(),
-						installationId,
+					console.log(
+						`Dispatching Manager workflows for ${organization}/${repository} using installation ${installationId}`,
 					);
 					const runContext = {
 						organization,
 						repository,
 						defaultBranch,
 						installationId,
-						installationToken,
 					};
 
 					// Group by binding so each Manager workflow gets one createBatch.

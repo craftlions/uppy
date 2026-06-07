@@ -33,12 +33,12 @@ export const npmManager: Manager = {
 /**
  * The shell command that updates an npm dependency. Runs `aube add <pkg>@<target>`
  * through a hermetic `mise exec` (no repo config, env, or hooks) so the update
- * does not depend on the target repo's mise setup. Appends `--dev` when the
- * dependency lives in `devDependencies`, so it is added with the right flag.
+ * does not depend on the target repo's mise setup. Appends `-D` when the
+ * dependency lives in `devDependencies`, so it is added with the right section.
  */
 export function npmUpdateCommand(upgrade: SafeUpgrade): string {
 	const base = `mise --no-config --no-env --no-hooks exec aube@latest node@latest -- aube add ${upgrade.package}@${upgrade.target}`;
-	return upgrade.depType === "devDependencies" ? `${base} --dev` : base;
+	return upgrade.depType === "devDependencies" ? `${base} -D` : base;
 }
 
 /** The structured commit subject for an npm upgrade, Renovate-style. */

@@ -19,13 +19,13 @@ describe("npmUpdateCommand", () => {
 		);
 	});
 
-	it("appends --dev only for devDependencies", () => {
+	it("appends -D only for devDependencies", () => {
 		expect(npmUpdateCommand({ ...base, depType: "devDependencies" })).toBe(
-			"mise --no-config --no-env --no-hooks exec aube@latest node@latest -- aube add @octokit/core@7.0.6 --dev",
+			"mise --no-config --no-env --no-hooks exec aube@latest node@latest -- aube add @octokit/core@7.0.6 -D",
 		);
 		expect(
 			npmUpdateCommand({ ...base, depType: "dependencies" }),
-		).not.toContain("--dev");
+		).not.toContain(" -D");
 	});
 });
 

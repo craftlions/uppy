@@ -17,7 +17,7 @@ published template `craftlions/uppy-base` (the single source of truth for the
 template name). The worker passes the installation token to the sandbox as
 `GIT_TOKEN` (`GIT_USERNAME=x-access-token`); the bot's git identity
 (`craftlions-uppy[bot]`) is configured separately. The sandbox clones the
-repository to `/workspace`, runs the Manager's static update command
+repository to `/home/user/workspace`, runs the Manager's static update command
 (`mise use <tool>@<target>` for mise; the hermetic `mise exec … aube add` for
 npm, with `--dev` for devDependencies), commits with `--signoff` and a
 `chore(deps): …` subject, and force-pushes with `--force-with-lease` to the same
@@ -26,7 +26,7 @@ clobber and the PR number is preserved. A "no changes" outcome throws — no
 `--allow-empty` — so an "up to date" rerun never opens an empty PR. The sandbox
 is always killed in a `finally`.
 
-The sandbox writes `/workspace/result.json` (`commitSha`, `branch`, `diff`,
+The sandbox writes `/home/user/workspace/result.json` (`commitSha`, `branch`, `diff`,
 `filesChanged`); the worker reads it back as the single source for the PR body — a
 structured header (Package, From, To, Manifest, Bump type) plus an inline diff and
 a link to the Dependency Dashboard issue. The closed-PR short-circuit lives inside
