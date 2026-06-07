@@ -13,8 +13,8 @@ function input(
 	return {
 		updatedAt: UPDATED_AT,
 		minimumReleaseAge: { ms: 0, forced: false },
-		ecosystems: [],
-		updatesByEcosystem: {},
+		managerDependencies: [],
+		updatesByManager: {},
 		vulnerabilityAlerts: [],
 		osvAlerts: [],
 		...overrides,
@@ -119,9 +119,9 @@ describe("renderDependencyDashboard", () => {
 		expect(
 			renderDependencyDashboard(
 				input({
-					ecosystems: [
+					managerDependencies: [
 						{
-							ecosystem: "mise",
+							manager: "mise",
 							files: [
 								{
 									file: "mise.toml",
@@ -130,7 +130,7 @@ describe("renderDependencyDashboard", () => {
 							],
 						},
 						{
-							ecosystem: "npm",
+							manager: "npm",
 							files: [
 								{
 									file: "package.json",
@@ -139,7 +139,7 @@ describe("renderDependencyDashboard", () => {
 							],
 						},
 					],
-					updatesByEcosystem: { mise: {}, npm: {} },
+					updatesByManager: { mise: {}, npm: {} },
 				}),
 			),
 		).toMatchInlineSnapshot(`
@@ -167,9 +167,9 @@ describe("renderDependencyDashboard", () => {
 		expect(
 			renderDependencyDashboard(
 				input({
-					ecosystems: [
+					managerDependencies: [
 						{
-							ecosystem: "npm",
+							manager: "npm",
 							files: [
 								{
 									file: "package.json",
@@ -183,7 +183,7 @@ describe("renderDependencyDashboard", () => {
 							],
 						},
 					],
-					updatesByEcosystem: {
+					updatesByManager: {
 						npm: {
 							safe: {
 								current: "1.0.0",
@@ -230,9 +230,9 @@ describe("renderDependencyDashboard", () => {
 	it("renders a pin action for a scoped Detected Dependency", () => {
 		const dashboard = renderDependencyDashboard(
 			input({
-				ecosystems: [
+				managerDependencies: [
 					{
-						ecosystem: "npm",
+						manager: "npm",
 						files: [
 							{
 								file: "package.json",
@@ -248,10 +248,8 @@ describe("renderDependencyDashboard", () => {
 						],
 					},
 				],
-				updatesByEcosystem: { npm: {} },
-				pins: [
-					{ ecosystem: "npm", manifest: "package.json", package: "vitest" },
-				],
+				updatesByManager: { npm: {} },
+				pins: [{ manager: "npm", manifest: "package.json", package: "vitest" }],
 			}),
 		);
 
@@ -260,12 +258,12 @@ describe("renderDependencyDashboard", () => {
 		);
 	});
 
-	it("does not apply a pin action to the same package in another manifest or ecosystem", () => {
+	it("does not apply a pin action to the same package in another manifest or manager", () => {
 		const dashboard = renderDependencyDashboard(
 			input({
-				ecosystems: [
+				managerDependencies: [
 					{
-						ecosystem: "npm",
+						manager: "npm",
 						files: [
 							{
 								file: "apps/web/package.json",
@@ -281,7 +279,7 @@ describe("renderDependencyDashboard", () => {
 						],
 					},
 					{
-						ecosystem: "mise",
+						manager: "mise",
 						files: [
 							{
 								file: "mise.toml",
@@ -290,22 +288,20 @@ describe("renderDependencyDashboard", () => {
 						],
 					},
 				],
-				updatesByEcosystem: { npm: {}, mise: {} },
-				pins: [
-					{ ecosystem: "npm", manifest: "package.json", package: "vitest" },
-				],
+				updatesByManager: { npm: {}, mise: {} },
+				pins: [{ manager: "npm", manifest: "package.json", package: "vitest" }],
 			}),
 		);
 
 		expect(dashboard).not.toContain("📌 pin");
 	});
 
-	it("renders a plain table for an ecosystem without update support", () => {
+	it("renders a plain table for a manager without update support", () => {
 		const dashboard = renderDependencyDashboard(
 			input({
-				ecosystems: [
+				managerDependencies: [
 					{
-						ecosystem: "docker",
+						manager: "docker",
 						files: [
 							{
 								file: "Dockerfile",
@@ -325,9 +321,9 @@ describe("renderDependencyDashboard", () => {
 	it("renders unsupported dependencies as an informational note", () => {
 		const dashboard = renderDependencyDashboard(
 			input({
-				ecosystems: [
+				managerDependencies: [
 					{
-						ecosystem: "mise",
+						manager: "mise",
 						files: [
 							{
 								file: "mise.toml",
@@ -343,7 +339,7 @@ describe("renderDependencyDashboard", () => {
 						],
 					},
 				],
-				updatesByEcosystem: { mise: {} },
+				updatesByManager: { mise: {} },
 			}),
 		);
 
@@ -360,9 +356,9 @@ describe("renderDependencyDashboard", () => {
 		const shaB = "b".repeat(40);
 		const dashboard = renderDependencyDashboard(
 			input({
-				ecosystems: [
+				managerDependencies: [
 					{
-						ecosystem: "github-actions",
+						manager: "github-actions",
 						files: [
 							{
 								file: ".github/workflows/ci.yml",
@@ -385,7 +381,7 @@ describe("renderDependencyDashboard", () => {
 						],
 					},
 				],
-				updatesByEcosystem: {
+				updatesByManager: {
 					"github-actions": {
 						"actions/checkout@v4.1.0": {
 							current: "v4.1.0",

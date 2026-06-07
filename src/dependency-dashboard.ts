@@ -3,19 +3,19 @@ import type { EffectiveMinimumReleaseAge } from "./outdated.ts";
 import type { DependabotAlert } from "./vulnerability-alerts.ts";
 import {
 	type Dependency,
-	type DependencyEcosystem,
 	dependencyKey,
+	type ManagerDependencies,
 	type UpdateRecord,
 	type UpdateStatus,
 } from "./deps.ts";
 
 /**
- * A pin action targeting a single Detected Dependency, scoped by ecosystem,
+ * A pin action targeting a single Detected Dependency, scoped by Manager,
  * manifest, and package. The dashboard flags the matching row with a `📌 pin`
- * action; the same package in a different manifest or ecosystem is left alone.
+ * action; the same package in a different manifest or Manager is left alone.
  */
 export interface PinAction {
-	ecosystem: string;
+	manager: string;
 	manifest: string;
 	package: string;
 }
@@ -26,14 +26,14 @@ export interface DependencyDashboardInput {
 	updatedAt: Date;
 	/** The effective minimum release age; its note renders only when forced. */
 	minimumReleaseAge: EffectiveMinimumReleaseAge;
-	/** Detected ecosystems, rendered as one table each. */
-	ecosystems: DependencyEcosystem[];
+	/** Detected dependencies per Manager, rendered as one table each. */
+	managerDependencies: ManagerDependencies[];
 	/**
-	 * Update status per ecosystem, keyed by ecosystem name. A detected ecosystem
+	 * Update status per Manager, keyed by Manager name. A detected Manager group
 	 * with no pending updates maps to an empty record (rendered as up to date)
 	 * rather than being omitted.
 	 */
-	updatesByEcosystem: Partial<Record<string, UpdateRecord>>;
+	updatesByManager: Partial<Record<string, UpdateRecord>>;
 	/** Scoped pin actions to flag on matching dependency rows. */
 	pins?: PinAction[];
 	/** Open GitHub vulnerability alerts. */
@@ -46,18 +46,18 @@ const UP_TO_DATE = "✅ up to date";
 const PIN = "📌 pin";
 const PIN_DIGEST = "📌 pin digest";
 
-/** Ecosystems whose tables gain `Target`/`Update` columns. */
-const UPDATABLE_ECOSYSTEMS = new Set(["npm", "mise"]);
+/** Managers whose tables gain `Target`/`Update` columns. */
+const UPDATABLE_MANAGERS = new Set(["npm", "mise"]);
 
 /** The leading bytes of a commit sha, as GitHub abbreviates them. */
 const shortSha = (sha: string): string => sha.slice(0, 7);
 
-const countDependencies = (eco: DependencyEcosystem): number =>
-	eco.files.reduce((sum, file) => sum + file.dependencies.length, 0);
+const countDependencies = (group: ManagerDependencies): number =>
+	group.files.reduce((sum, file) => sum + file.dependencies.length, 0);
 
 /** A stable key identifying a Detected Dependency for scoped pin lookups. */
-const pinKey = (ecosystem: string, manifest: string, pkg: string): string =>
-	`${ecosystem}\u0000${manifest}\u0000${pkg}`;
+const pinKey = (manager: string, manifest: string, pkg: string): string =>
+	`${manager}\u0000${manifest}\u0000${pkg}`;
 
 /**
  * Pick the `Target` and `Update` table cells for a dependency given its update
@@ -111,42 +111,42 @@ function updateStatusCells(status: UpdateStatus | undefined): {
 	return { target: `\`${status.target}\``, update: safe };
 }
 
-/** Render a plain `Package | Version | Manifest` table for an ecosystem. */
-function renderPlainSection(eco: DependencyEcosystem): string {
-	const rows = eco.files
+/** Render a plain `Package | Version | Manifest` table for a Manager group. */
+function renderPlainSection(group: ManagerDependencies): string {
+	const rows = group.files
 		.flatMap((file) =>
 			file.dependencies.map(
 				(dep) => `| \`${dep.name}\` | \`${dep.version}\` | \`${file.file}\` |`,
 			),
 		)
 		.join("\n");
-	return `### ${eco.ecosystem} (${countDependencies(eco)})\n\n| Package | Version | Manifest |\n| --- | --- | --- |\n${rows}`;
+	return `### ${group.manager} (${countDependencies(group)})\n\n| Package | Version | Manifest |\n| --- | --- | --- |\n${rows}`;
 }
 
 /**
- * Render an ecosystem with extra `Target` and `Update` columns, flagging the
+ * Render a Manager group with extra `Target` and `Update` columns, flagging the
  * deps that Renovate's default policy would bump. Deps without an entry in
  * `updates` are shown as up to date. Rows whose scoped identity is in `pinned`
  * additionally get a `📌 pin` action.
  */
 function renderUpdatableSection(
-	eco: DependencyEcosystem,
+	group: ManagerDependencies,
 	updates: Readonly<UpdateRecord>,
 	pinned: ReadonlySet<string>,
 ): string {
-	const rows = eco.files
+	const rows = group.files
 		.flatMap((file) =>
 			file.dependencies.map((dep) => {
 				const { target, update } = updateCells(
 					updates[dep.name],
-					pinned.has(pinKey(eco.ecosystem, file.file, dep.name)),
+					pinned.has(pinKey(group.manager, file.file, dep.name)),
 					dep.unsupportedReason,
 				);
 				return `| \`${dep.name}\` | \`${dep.version}\` | ${target} | ${update} | \`${file.file}\` |`;
 			}),
 		)
 		.join("\n");
-	return `### ${eco.ecosystem} (${countDependencies(eco)})\n\n| Package | Current | Target | Update | Manifest |\n| --- | --- | --- | --- | --- |\n${rows}`;
+	return `### ${group.manager} (${countDependencies(group)})\n\n| Package | Current | Target | Update | Manifest |\n| --- | --- | --- | --- | --- |\n${rows}`;
 }
 
 /**
@@ -216,15 +216,15 @@ function actionUpdateCell(status: UpdateStatus | undefined): string {
 }
 
 /**
- * Render the github-actions ecosystem. Unlike npm/mise the `Current` and `Target`
+ * Render the github-actions Manager. Unlike npm/mise the `Current` and `Target`
  * cells carry both a version and a commit sha, since uppy's recommendation is to
  * pin the action to the sha of the safest acceptable version.
  */
 function renderGithubActionsSection(
-	eco: DependencyEcosystem,
+	group: ManagerDependencies,
 	updates: Readonly<UpdateRecord>,
 ): string {
-	const rows = eco.files
+	const rows = group.files
 		.flatMap((file) =>
 			file.dependencies.map((dep) => {
 				const status = updates[dependencyKey(dep)];
@@ -232,49 +232,49 @@ function renderGithubActionsSection(
 			}),
 		)
 		.join("\n");
-	return `### ${eco.ecosystem} (${countDependencies(eco)})\n\n| Action | Current | Target | Update | Workflow |\n| --- | --- | --- | --- | --- |\n${rows}`;
+	return `### ${group.manager} (${countDependencies(group)})\n\n| Action | Current | Target | Update | Workflow |\n| --- | --- | --- | --- | --- |\n${rows}`;
 }
 
 /**
- * Render detected dependencies as a Markdown table per ecosystem. The `npm` and
- * `mise` ecosystems gain `Target`/`Update` columns describing the Renovate-style
+ * Render detected dependencies as a Markdown table per Manager. The `npm` and
+ * `mise` Managers gain `Target`/`Update` columns describing the Renovate-style
  * bump for each outdated dependency; `github-actions` gets its own version+sha
- * table. A detected ecosystem with an empty update record still renders its
+ * table. A detected Manager group with an empty update record still renders its
  * dependencies as up to date.
  */
 function renderDetectedDependencies(
-	ecosystems: DependencyEcosystem[],
-	updatesByEcosystem: Partial<Record<string, UpdateRecord>>,
+	managerDependencies: ManagerDependencies[],
+	updatesByManager: Partial<Record<string, UpdateRecord>>,
 	pinned: ReadonlySet<string>,
 ): string {
-	if (ecosystems.length === 0) {
+	if (managerDependencies.length === 0) {
 		return "";
 	}
 
-	const sections = ecosystems.map((eco) => {
-		const updates = updatesByEcosystem[eco.ecosystem];
-		if (eco.ecosystem === "github-actions") {
-			return renderGithubActionsSection(eco, updates ?? {});
+	const sections = managerDependencies.map((group) => {
+		const updates = updatesByManager[group.manager];
+		if (group.manager === "github-actions") {
+			return renderGithubActionsSection(group, updates ?? {});
 		}
-		return updates && UPDATABLE_ECOSYSTEMS.has(eco.ecosystem)
-			? renderUpdatableSection(eco, updates, pinned)
-			: renderPlainSection(eco);
+		return updates && UPDATABLE_MANAGERS.has(group.manager)
+			? renderUpdatableSection(group, updates, pinned)
+			: renderPlainSection(group);
 	});
 
 	return `## Detected Dependencies\n\n${sections.join("\n\n")}`;
 }
 
 function renderUnsupportedDependencies(
-	ecosystems: DependencyEcosystem[],
+	managerDependencies: ManagerDependencies[],
 ): string {
-	const rows = ecosystems
-		.flatMap((eco) =>
-			eco.files.flatMap((file) =>
+	const rows = managerDependencies
+		.flatMap((group) =>
+			group.files.flatMap((file) =>
 				file.dependencies
 					.filter((dep) => dep.unsupportedReason)
 					.map(
 						(dep) =>
-							`> | \`${eco.ecosystem}/${dep.name}\` | \`${file.file}\` | ${dep.unsupportedReason} |`,
+							`> | \`${group.manager}/${dep.name}\` | \`${file.file}\` | ${dep.unsupportedReason} |`,
 					),
 			),
 		)
@@ -362,24 +362,24 @@ export function renderDependencyDashboard(
 	const {
 		updatedAt,
 		minimumReleaseAge,
-		ecosystems,
-		updatesByEcosystem,
+		managerDependencies,
+		updatesByManager,
 		pins = [],
 		vulnerabilityAlerts,
 		osvAlerts,
 	} = input;
 
 	const pinned = new Set(
-		pins.map((pin) => pinKey(pin.ecosystem, pin.manifest, pin.package)),
+		pins.map((pin) => pinKey(pin.manager, pin.manifest, pin.package)),
 	);
 
 	const sections = [
 		minimumReleaseAge.forced ? renderMinimumReleaseAgeNote() : "",
 		renderVulnerabilityAlerts(vulnerabilityAlerts),
 		renderOsvVulnerabilityAlerts(osvAlerts),
-		renderUnsupportedDependencies(ecosystems),
+		renderUnsupportedDependencies(managerDependencies),
 		"This issue lists Uppy updates and detected dependencies.",
-		renderDetectedDependencies(ecosystems, updatesByEcosystem, pinned),
+		renderDetectedDependencies(managerDependencies, updatesByManager, pinned),
 		`Last updated at ${updatedAt.toISOString()}`,
 	];
 

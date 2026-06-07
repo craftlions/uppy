@@ -1,8 +1,8 @@
 import type { Datasource } from "./datasource.ts";
 import type {
 	ContentReader,
-	DependencyEcosystem,
 	DependencyFile,
+	ManagerDependencies,
 } from "./deps.ts";
 import { createAquaDatasource } from "./datasources/aqua.ts";
 import { createGithubReleasesDatasource } from "./datasources/github-releases.ts";
@@ -22,7 +22,7 @@ import { npmManager } from "./managers/npm.ts";
  * it. Mirrors Renovate's manager vocabulary.
  */
 export interface Manager {
-	/** Renovate manager name; also the dashboard section and ecosystem label. */
+	/** Renovate manager name; also the dashboard section and Manager label. */
 	readonly name: string;
 	/** The default datasource for dependencies without their own datasource. */
 	readonly datasource?: string;
@@ -47,23 +47,23 @@ export const managerByName = (name: string): Manager | undefined =>
 
 /**
  * Read every manager's manifests from a repository and group the detected
- * dependencies by ecosystem (the manager name). Managers that find nothing are
+ * dependencies by Manager (the manager name). Managers that find nothing are
  * omitted. The orchestrator over {@link MANAGERS}.
  */
 export async function detectDependencies(
 	octokit: ContentReader,
 	owner: string,
 	repo: string,
-): Promise<DependencyEcosystem[]> {
-	const ecosystems: DependencyEcosystem[] = [];
+): Promise<ManagerDependencies[]> {
+	const managerDependencies: ManagerDependencies[] = [];
 	for (const manager of MANAGERS) {
 		const files = await manager.detect(octokit, owner, repo);
 		const nonEmpty = files.filter((file) => file.dependencies.length > 0);
 		if (nonEmpty.length > 0) {
-			ecosystems.push({ ecosystem: manager.name, files: nonEmpty });
+			managerDependencies.push({ manager: manager.name, files: nonEmpty });
 		}
 	}
-	return ecosystems;
+	return managerDependencies;
 }
 
 /**

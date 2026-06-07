@@ -67,7 +67,7 @@ export interface DependencyRef {
 }
 
 /**
- * One ecosystem's source of version metadata. Given the dependencies' names and
+ * A single source of version metadata. Given the dependencies' names and
  * refs, it returns the {@link VersionInfo} for each name it can resolve, omitting
  * the rest. The interface is batch-shaped so each adapter owns its own round-trip
  * strategy — npm chunks names into capped batch requests, mise fans out one

@@ -139,13 +139,17 @@ describe("parsePackageJson", () => {
 });
 
 describe("detectDependencies", () => {
-	it("reads both manifests via octokit and groups by ecosystem", async () => {
+	it("reads both manifests via octokit and groups by manager", async () => {
 		const { octokit, getContent } = mockReader({
 			"mise.toml": MISE_TOML,
 			"package.json": PACKAGE_JSON,
 		});
 
-		const ecosystems = await detectDependencies(octokit, "craftlions", "uppy");
+		const managerDependencies = await detectDependencies(
+			octokit,
+			"craftlions",
+			"uppy",
+		);
 
 		expect(getContent).toHaveBeenCalledWith({
 			owner: "craftlions",
@@ -157,9 +161,9 @@ describe("detectDependencies", () => {
 			repo: "uppy",
 			path: "package.json",
 		});
-		expect(ecosystems).toEqual([
+		expect(managerDependencies).toEqual([
 			{
-				ecosystem: "mise",
+				manager: "mise",
 				files: [
 					{
 						file: "mise.toml",
@@ -183,7 +187,7 @@ describe("detectDependencies", () => {
 				],
 			},
 			{
-				ecosystem: "npm",
+				manager: "npm",
 				files: [
 					{
 						file: "package.json",
@@ -210,18 +214,22 @@ describe("detectDependencies", () => {
 	it("skips manifests that are missing", async () => {
 		const { octokit } = mockReader({ "package.json": PACKAGE_JSON });
 
-		const ecosystems = await detectDependencies(octokit, "craftlions", "uppy");
+		const managerDependencies = await detectDependencies(
+			octokit,
+			"craftlions",
+			"uppy",
+		);
 
-		expect(ecosystems.map((eco) => eco.ecosystem)).toEqual(["npm"]);
+		expect(managerDependencies.map((group) => group.manager)).toEqual(["npm"]);
 	});
 });
 
 describe("listSafeUpgrades", () => {
-	it("returns safe upgrades across ecosystems and skips held updates", () => {
+	it("returns safe upgrades across managers and skips held updates", () => {
 		const upgrades = listSafeUpgrades(
 			[
 				{
-					ecosystem: "mise",
+					manager: "mise",
 					files: [
 						{
 							file: "mise.toml",
@@ -233,7 +241,7 @@ describe("listSafeUpgrades", () => {
 					],
 				},
 				{
-					ecosystem: "npm",
+					manager: "npm",
 					files: [
 						{
 							file: "package.json",
@@ -271,7 +279,7 @@ describe("listSafeUpgrades", () => {
 
 		expect(upgrades).toEqual([
 			{
-				ecosystem: "mise",
+				manager: "mise",
 				manifest: "mise.toml",
 				package: "aube",
 				current: "1.17.1",
@@ -279,7 +287,7 @@ describe("listSafeUpgrades", () => {
 				updateType: "minor",
 			},
 			{
-				ecosystem: "npm",
+				manager: "npm",
 				manifest: "package.json",
 				package: "vitest",
 				current: "4.1.7",
@@ -289,11 +297,11 @@ describe("listSafeUpgrades", () => {
 		]);
 	});
 
-	it("lists safe upgrades from ecosystem-specific update records", () => {
+	it("lists safe upgrades from manager-specific update records", () => {
 		const upgrades = listSafeUpgrades(
 			[
 				{
-					ecosystem: "mise",
+					manager: "mise",
 					files: [
 						{
 							file: "mise.toml",
@@ -302,7 +310,7 @@ describe("listSafeUpgrades", () => {
 					],
 				},
 				{
-					ecosystem: "npm",
+					manager: "npm",
 					files: [
 						{
 							file: "package.json",
@@ -333,7 +341,7 @@ describe("listSafeUpgrades", () => {
 
 		expect(upgrades).toEqual([
 			{
-				ecosystem: "mise",
+				manager: "mise",
 				manifest: "mise.toml",
 				package: "aube",
 				current: "1.17.1",
@@ -341,7 +349,7 @@ describe("listSafeUpgrades", () => {
 				updateType: "minor",
 			},
 			{
-				ecosystem: "npm",
+				manager: "npm",
 				manifest: "package.json",
 				package: "aube",
 				current: "1.0.0",

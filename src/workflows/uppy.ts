@@ -26,13 +26,13 @@ import {
 	osvVulnerabilityAlertsEnabled,
 	vulnerabilityAlertsEnabled,
 } from "../renovate.ts";
+import { fetchUpdateCheckForManager } from "../update-check.ts";
 import {
 	type DependabotAlert,
 	fetchVulnerabilityAlerts,
 	logVulnerabilityAlerts,
 } from "../vulnerability-alerts.ts";
 import { safeUpgradeBranch } from "./branches.ts";
-import { fetchUpdatesByDatasource } from "./updates.ts";
 
 type Params = { organization: string; repository: string };
 
@@ -55,10 +55,13 @@ export class UppyWorkflow extends WorkflowEntrypoint<Env, Params> {
 
 		const config = detectedConfig?.config;
 
-		const ecosystems = await step.do("detect-dependencies", async () => {
-			const { octokit } = await repositoryAccessFor(organization, repository);
-			return await detectDependencies(octokit, organization, repository);
-		});
+		const managerDependencies = await step.do(
+			"detect-dependencies",
+			async () => {
+				const { octokit } = await repositoryAccessFor(organization, repository);
+				return await detectDependencies(octokit, organization, repository);
+			},
+		);
 
 		let vulnerabilityAlerts: DependabotAlert[] = [];
 		if (config && vulnerabilityAlertsEnabled(config)) {
@@ -93,11 +96,11 @@ export class UppyWorkflow extends WorkflowEntrypoint<Env, Params> {
 			osvAlerts = await step.do(
 				"query-osv-for-npm-vulnerabilities",
 				async () => {
-					const npmEcosystem = ecosystems.find(
-						(eco) => eco.ecosystem === "npm",
+					const npmManager = managerDependencies.find(
+						(group) => group.manager === "npm",
 					);
 					const dependencies =
-						npmEcosystem?.files.flatMap((file) => file.dependencies) ?? [];
+						npmManager?.files.flatMap((file) => file.dependencies) ?? [];
 					try {
 						const alerts = await fetchOsvVulnerabilityAlerts(dependencies);
 						logOsvVulnerabilityAlerts(alerts);
@@ -118,32 +121,31 @@ export class UppyWorkflow extends WorkflowEntrypoint<Env, Params> {
 		);
 
 		const updateEntries = await Promise.all(
-			ecosystems.map((eco) =>
-				step.do(`fetch-outdated-${eco.ecosystem}-dependencies`, async () => {
-					const manager = managerByName(eco.ecosystem);
+			managerDependencies.map((group) =>
+				step.do(`update-check-${group.manager}`, async () => {
+					const manager = managerByName(group.manager);
 					if (!manager) {
-						return [eco.ecosystem, {} as UpdateRecord] as const;
+						return [group.manager, {} as UpdateRecord] as const;
 					}
 					const { octokit } = await repositoryAccessFor(
 						organization,
 						repository,
 					);
-					const dependencies = eco.files.flatMap((file) => file.dependencies);
-					const updates = await fetchUpdatesByDatasource(
-						dependencies,
-						manager.datasource,
+					const updates = await fetchUpdateCheckForManager(
+						group,
+						manager,
 						(datasourceName) => datasourceFor(datasourceName, octokit),
 						{ minimumReleaseAgeMs: minimumReleaseAge.ms },
 					);
-					return [eco.ecosystem, updates] as const;
+					return [group.manager, updates] as const;
 				}),
 			),
 		);
-		const updatesByEcosystem: Partial<Record<string, UpdateRecord>> =
+		const updatesByManager: Partial<Record<string, UpdateRecord>> =
 			Object.fromEntries(updateEntries);
 
 		const safeUpgrades = await step.do("list-safe-upgrades", async () => {
-			return listSafeUpgrades(ecosystems, updatesByEcosystem);
+			return listSafeUpgrades(managerDependencies, updatesByManager);
 		});
 
 		let safeUpgradesDispatched = 0;
@@ -165,8 +167,8 @@ export class UppyWorkflow extends WorkflowEntrypoint<Env, Params> {
 		}
 
 		if (config && dependencyDashboardEnabled(config)) {
-			const pins: PinAction[] = ecosystems.flatMap((eco) =>
-				eco.files.flatMap((file) =>
+			const pins: PinAction[] = managerDependencies.flatMap((group) =>
+				group.files.flatMap((file) =>
 					file.dependencies
 						.filter(
 							(dep) =>
@@ -175,7 +177,7 @@ export class UppyWorkflow extends WorkflowEntrypoint<Env, Params> {
 								dependencyTypePinned(config, dep.depType),
 						)
 						.map((dep) => ({
-							ecosystem: eco.ecosystem,
+							manager: group.manager,
 							manifest: file.file,
 							package: dep.name,
 						})),
@@ -188,8 +190,8 @@ export class UppyWorkflow extends WorkflowEntrypoint<Env, Params> {
 					renderDependencyDashboard({
 						updatedAt: new Date(),
 						minimumReleaseAge,
-						ecosystems,
-						updatesByEcosystem,
+						managerDependencies,
+						updatesByManager,
 						pins,
 						vulnerabilityAlerts,
 						osvAlerts,

@@ -22,6 +22,16 @@ resolves both package manifests and npm-backed mise tools. Renovate's
 `matchDatasources` vocabulary.
 _Avoid_: VersionSource, registry client, provider
 
+**Update check**:
+The decision pass between a Manager (files) and its Datasources (remote version
+metadata): for one Manager's detected dependencies it flattens the files, skips
+Unsupported dependencies, routes each dependency to its Datasource (the Manager
+default or a per-dependency override), looks them up in parallel, and merges the
+results into one update status per dependency. Owns the general recommendation
+policy — Minimum release age, `ignoreUnstable`, `respectLatest`.
+`fetchUpdateCheckForManager` runs it over one Manager dependency group.
+_Avoid_: update plan (implies scheduling or branch dispatch), resolver
+
 **Mise backend**:
 The plain full source identity behind a mise tool, such as `core:node`,
 `aqua:aws/aws-cli`, `github:endevco/aube`, or `npm:@openai/codex`.
