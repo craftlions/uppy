@@ -29,7 +29,7 @@ export interface ResolveOptions {
  * versions are ignored unless `current` is already an unstable prerelease of the
  * same base (so a bump never jumps across prerelease tracks), and updates never
  * overshoot the `latest` dist-tag. The supplied {@link Versioning} decides what
- * "newer", "stable", and "same base" mean for the ecosystem.
+ * "newer", "stable", and "same base" mean for the datasource.
  */
 function acceptableUpdates(
 	current: string,

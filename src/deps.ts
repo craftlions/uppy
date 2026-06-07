@@ -30,7 +30,7 @@ export interface Dependency {
 	/**
 	 * The dependency group this came from, used to match Renovate's
 	 * `matchDepTypes` (e.g. `dependencies`, `devDependencies`, `action`). Absent
-	 * for ecosystems without dependency types, such as mise.
+	 * for managers without dependency types, such as mise.
 	 */
 	depType?: string;
 	/**
@@ -52,8 +52,14 @@ export interface DependencyFile {
 	file: string;
 }
 
-export interface DependencyEcosystem {
-	ecosystem: string;
+/**
+ * One Manager's detected dependencies: the grouping identity uppy owns. The
+ * `manager` field is the Manager name (`npm`, `mise`, `github-actions`) the
+ * detected `files` were read from. This is uppy's own shape — unrelated to the
+ * `ecosystem` vocabulary of external GitHub or OSV payloads.
+ */
+export interface ManagerDependencies {
+	manager: string;
 	files: DependencyFile[];
 }
 
@@ -118,7 +124,7 @@ export interface UpdateStatus {
 }
 
 export interface SafeUpgrade {
-	ecosystem: string;
+	manager: string;
 	manifest: string;
 	package: string;
 	current: string;
@@ -309,7 +315,7 @@ export async function fetchFileContent(
 
 /**
  * The stable key an {@link UpdateStatus} is stored under in an
- * {@link UpdateRecord}. For most ecosystems a dependency name is unique within a
+ * {@link UpdateRecord}. For most managers a dependency name is unique within a
  * manifest set, so the name suffices. github-actions is the exception: the same
  * `owner/repo` action can appear at different refs across workflow files, so its
  * key includes the ref to keep those occurrences distinct.
@@ -329,14 +335,14 @@ function isUpdateRecord(
 	);
 }
 
-function updatesForEcosystem(
+function updatesForManager(
 	updates: UpdateRecords | undefined,
-	ecosystem: string,
+	manager: string,
 ): Readonly<UpdateRecord> | undefined {
 	if (!updates) {
 		return undefined;
 	}
-	return isUpdateRecord(updates) ? updates : updates[ecosystem];
+	return isUpdateRecord(updates) ? updates : updates[manager];
 }
 
 const updateForDependency = (
@@ -346,7 +352,7 @@ const updateForDependency = (
 
 /** List every dependency whose resolved target has aged into a safe update. */
 export function listSafeUpgrades(
-	ecosystems: DependencyEcosystem[],
+	managerDependencies: ManagerDependencies[],
 	updates?: UpdateRecords,
 ): SafeUpgrade[] {
 	if (!updates) {
@@ -354,20 +360,17 @@ export function listSafeUpgrades(
 	}
 
 	const upgrades: SafeUpgrade[] = [];
-	for (const eco of ecosystems) {
-		const ecosystemUpdates = updatesForEcosystem(updates, eco.ecosystem);
-		if (!ecosystemUpdates) {
+	for (const group of managerDependencies) {
+		const managerUpdates = updatesForManager(updates, group.manager);
+		if (!managerUpdates) {
 			continue;
 		}
-		for (const file of eco.files) {
+		for (const file of group.files) {
 			for (const dep of file.dependencies) {
-				const status = updateForDependency(
-					ecosystemUpdates,
-					dependencyKey(dep),
-				);
+				const status = updateForDependency(managerUpdates, dependencyKey(dep));
 				if (status?.target) {
 					upgrades.push({
-						ecosystem: eco.ecosystem,
+						manager: group.manager,
 						manifest: file.file,
 						package: dep.name,
 						current: status.current,

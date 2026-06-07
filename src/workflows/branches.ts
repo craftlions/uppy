@@ -13,7 +13,7 @@ function branchSegment(value: string): string {
 }
 
 export function safeUpgradeBranch(upgrade: SafeUpgrade): string {
-	const slug = [upgrade.ecosystem, upgrade.package, upgrade.target].map(
+	const slug = [upgrade.manager, upgrade.package, upgrade.target].map(
 		branchSegment,
 	);
 	return `uppy/${slug.join("-")}`;
