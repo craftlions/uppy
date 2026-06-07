@@ -20,9 +20,6 @@ export const BOT_EMAIL = "craftlions-uppy[bot]@users.noreply.github.com";
 /** Where every Manager workflow clones the target repository inside the sandbox. */
 export const WORKSPACE = "/home/user/workspace";
 
-/** The workspace path the sandbox writes its {@link SandboxResult} handoff to. */
-const RESULT_PATH = `${WORKSPACE}/result.json`;
-
 /**
  * The full run-level payload one Manager workflow instance receives from the
  * orchestrator. {@link SafeUpgrade} is the per-upgrade data; the rest is context
@@ -39,9 +36,9 @@ export interface UpgradeParams {
 }
 
 /**
- * The sandbox → worker handoff (see CONTEXT.md, "Manager workflow"). Written to
- * `${WORKSPACE}/result.json` inside the sandbox and read back out, so the PR
- * body is rendered from a single source of truth rather than re-running git.
+ * The sandbox → worker handoff (see CONTEXT.md, "Manager workflow"): the
+ * structured result the sandbox step returns, so the PR body is rendered from a
+ * single source of truth rather than re-running git.
  */
 export interface SandboxResult {
 	commitSha: string;
@@ -118,11 +115,6 @@ export async function mintInstallationToken(
 		repositories: [repository],
 	});
 	return data.token;
-}
-
-/** The PR title and commit subject share the structured `chore(deps): …` shape. */
-function prTitle(upgrade: SafeUpgrade, spec: ManagerUpgradeSpec): string {
-	return spec.commitMessage(upgrade);
 }
 
 /**
@@ -399,87 +391,80 @@ export async function runManagerUpgrade(
 		console.log(
 			`Minted installation token for ${params.organization}/${params.repository} with length ${installationToken.length}`,
 		);
-		const sandbox = await E2bSandbox.create(E2B_TEMPLATE, {
-			apiKey: env.E2B_API_KEY,
-			timeoutMs: 600_000,
-			allowInternetAccess: true,
-		});
-		try {
-			const gitCredentials = {
-				username: "x-access-token",
-				password: installationToken,
-			};
-			const cloneUrl = `https://github.com/${params.organization}/${params.repository}.git`;
-			console.log(
-				`Preparing sandbox upgrade for ${params.organization}/${params.repository} on ${branch} with token length ${installationToken.length}`,
-			);
-			await sandbox.git.configureUser(BOT_NAME, BOT_EMAIL);
-			await sandbox.git.dangerouslyAuthenticate(gitCredentials);
-			const clone = await sandbox.git.clone(cloneUrl, {
-				...gitCredentials,
-				branch: params.defaultBranch,
-				depth: 1,
-				path: WORKSPACE,
-			});
-			console.log(clone);
-			console.log(
-				`Creating local branch ${branch} from ${params.defaultBranch}`,
-			);
-			const createBranch = await sandbox.git.createBranch(".", branch, {
-				cwd: WORKSPACE,
-			});
-			console.log(createBranch);
-			const update = await sandbox.commands.run(
-				spec.updateCommand(params.upgrade),
-				{
-					cwd: WORKSPACE,
-					timeoutMs: 300_000,
-					onStderr: (chunk) => console.error(`STDERR: ${chunk}`),
-					onStdout: (chunk) => console.log(`STDOUT: ${chunk}`),
-				},
-			);
-			console.log(update);
-			if (update.exitCode !== 0) {
-				throw commandFailed("update command", update);
-			}
-			const add = await sandbox.git.add(".", { all: true, cwd: WORKSPACE });
-			console.log(add);
-			const status = await sandbox.git.status(".", { cwd: WORKSPACE });
-			const filesChanged = status.stagedCount;
-			if (filesChanged === 0) {
-				throw new NonRetryableError(
-					`update command produced no changes for ${params.upgrade.package} -> ${params.upgrade.target}`,
+		return await withSandbox(
+			env,
+			{ envs: {}, timeoutMs: 600_000, allowInternetAccess: true },
+			async (sandbox) => {
+				const gitCredentials = {
+					username: "x-access-token",
+					password: installationToken,
+				};
+				const cloneUrl = `https://github.com/${params.organization}/${params.repository}.git`;
+				console.log(
+					`Preparing sandbox upgrade for ${params.organization}/${params.repository} on ${branch} with token length ${installationToken.length}`,
 				);
-			}
-			const changes = await Promise.all(
-				status.fileStatus
-					.filter((file) => file.staged)
-					.map(async (file) => {
-						const path = file.name;
-						if (file.status === "deleted") {
-							return { path, deleted: true };
-						}
-						return {
-							path,
-							content: await sandbox.files.read(`${WORKSPACE}/${path}`),
-						};
-					}),
-			);
+				await sandbox.git.configureUser(BOT_NAME, BOT_EMAIL);
+				await sandbox.git.dangerouslyAuthenticate(gitCredentials);
+				const clone = await sandbox.git.clone(cloneUrl, {
+					...gitCredentials,
+					branch: params.defaultBranch,
+					depth: 1,
+					path: WORKSPACE,
+				});
+				console.log(clone);
+				console.log(
+					`Creating local branch ${branch} from ${params.defaultBranch}`,
+				);
+				const createBranch = await sandbox.git.createBranch(".", branch, {
+					cwd: WORKSPACE,
+				});
+				console.log(createBranch);
+				const update = await sandbox.commands.run(
+					spec.updateCommand(params.upgrade),
+					{
+						cwd: WORKSPACE,
+						timeoutMs: 300_000,
+						onStderr: (chunk) => console.error(`STDERR: ${chunk}`),
+						onStdout: (chunk) => console.log(`STDOUT: ${chunk}`),
+					},
+				);
+				console.log(update);
+				if (update.exitCode !== 0) {
+					throw commandFailed("update command", update);
+				}
+				const add = await sandbox.git.add(".", { all: true, cwd: WORKSPACE });
+				console.log(add);
+				const status = await sandbox.git.status(".", { cwd: WORKSPACE });
+				const filesChanged = status.stagedCount;
+				if (filesChanged === 0) {
+					throw new NonRetryableError(
+						`update command produced no changes for ${params.upgrade.package} -> ${params.upgrade.target}`,
+					);
+				}
+				const changes = await Promise.all(
+					status.fileStatus
+						.filter((file) => file.staged)
+						.map(async (file) => {
+							const path = file.name;
+							if (file.status === "deleted") {
+								return { path, deleted: true };
+							}
+							return {
+								path,
+								content: await sandbox.files.read(`${WORKSPACE}/${path}`),
+							};
+						}),
+				);
 
-			const result: SandboxUpgradeResult = {
-				commitSha: "",
-				branch,
-				diff: "",
-				filesChanged,
-				changes,
-			};
-			await sandbox.files.write(RESULT_PATH, JSON.stringify(result));
-			return JSON.parse(
-				await sandbox.files.read(RESULT_PATH),
-			) as SandboxUpgradeResult;
-		} finally {
-			await sandbox.kill();
-		}
+				return {
+					commitSha: "",
+					branch,
+					diff: "",
+					filesChanged,
+					changes,
+				} satisfies SandboxUpgradeResult;
+			},
+		);
 	});
 
 	await step.do("publish-branch", async () => {
@@ -514,7 +499,8 @@ export async function runManagerUpgrade(
 			result,
 			await dashboardIssueUrl(octokit, params),
 		);
-		const title = prTitle(params.upgrade, spec);
+		// The PR title and commit subject share the structured `chore(deps): …` shape.
+		const title = spec.commitMessage(params.upgrade);
 		if (openPr !== undefined) {
 			await octokit.rest.pulls.update({
 				owner: params.organization,

@@ -1,5 +1,4 @@
 import type { WorkflowEvent } from "cloudflare:workers";
-import type { UpgradeParams } from "./sandbox.ts";
 import { WorkflowEntrypoint, type WorkflowStep } from "cloudflare:workers";
 import {
 	type PinAction,
@@ -38,6 +37,7 @@ import {
 	logVulnerabilityAlerts,
 } from "../vulnerability-alerts.ts";
 import { DEFERRED_MANAGERS, managerWorkflowBinding } from "./dispatch.ts";
+import { BOT_NAME, type UpgradeParams } from "./sandbox.ts";
 
 type Params = { organization: string; repository: string };
 
@@ -244,7 +244,7 @@ export class UppyWorkflow extends WorkflowEntrypoint<Env, Params> {
 					owner: organization,
 					repo: repository,
 					state: "open",
-					creator: "craftlions-uppy[bot]",
+					creator: BOT_NAME,
 				});
 				if (issues.data.length > 0) {
 					await octokit.rest.issues.update({
