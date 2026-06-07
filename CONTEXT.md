@@ -57,11 +57,6 @@ How old a published version must be before uppy will recommend updating to it.
 uppy enforces a paranoid 3-day floor even when config asks for less.
 _Avoid_: cooldown, quarantine, age gate
 
-**Update check**:
-The decision pass that compares detected dependencies with Datasource metadata
-and produces each dependency's update status.
-_Avoid_: update plan, resolution pass
-
 **Digest pin**:
 A GitHub Action referenced by its exact commit sha with the tag kept as a
 trailing `# comment` track (`@<sha> # v4.1.0`). uppy treats the sha as
@@ -69,3 +64,13 @@ authoritative and recommends pinning every unpinned action regardless of config.
 Distinct from the npm range pin (`:pinDevDependencies`), which exacts a range like
 `^1.2.3` and involves no sha.
 _Avoid_: pin (ambiguous with the range pin), lock, freeze
+
+**Manager workflow**:
+A Cloudflare Workflow class co-located with a Manager (`MiseWorkflow` in
+`src/managers/mise.ts`, etc.), dispatched once per safe upgrade of that
+Manager. Receives an `UpgradeParams` payload from `UppyWorkflow`, runs the
+full sandbox → commit → push → PR cycle in a single workflow instance, and
+exits with the result. The orchestrator does not know what a Manager workflow
+does internally — it only knows which binding to call.
+_Avoid_: per-update workflow (one instance per safe upgrade is a *single*
+Manager workflow instance, not a separate class), update worker

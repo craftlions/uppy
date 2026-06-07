@@ -29,10 +29,12 @@
   "license": "MIT",
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "0.16.10",
+    "@e2b/cli": "2.10.3",
     "@types/node": "25.9.1",
     "@types/semver": "7.7.1",
     "@vitest/coverage-istanbul": "4.1.7",
     "@vitest/ui": "4.1.8",
+    "e2b": "2.27.1",
     "vitest": "4.1.7"
   }
 }
