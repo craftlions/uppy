@@ -263,6 +263,77 @@ export function parseMiseToml(content: string): Dependency[] {
 	return deps;
 }
 
+// The `version` field of an inline-table value, e.g. the `version = "1.17.1"`
+// in `{ version = "1.17.1", os = ["linux"] }`. Anchored on the inline-table key
+// boundary — the opening `{` or a `,` separator — so `version` is matched only
+// as a whole key: a key that merely ends in `version` (e.g. `goversion`) and any
+// option value that contains the text are never mistaken for it. Captures the
+// boundary + key + `=` prefix and the opening quote, so a replacement swaps only
+// the version while keeping spacing, quote style, and the other options intact.
+const MISE_INLINE_VERSION = /([{,]\s*version\s*=\s*)(["'])[^"']*\2/;
+// A bare quoted string value, e.g. `"1.17.1"`. The single capture is the quote
+// char, reused for both ends so the quote style is preserved.
+const MISE_STRING_VALUE = /(["'])[^"']*\1/;
+
+// In the replacement strings below `${target}` is template-literal
+// interpolation, evaluated at runtime *before* `String.prototype.replace` is
+// even called, whereas `$1` and `$2` are regex backreferences resolved *by*
+// replace against the captured groups of MISE_INLINE_VERSION / MISE_STRING_VALUE.
+// The order is intentional: `${target}` is injected into the literal first, then
+// replace re-emits the captured key/prefix ($1) and quote(s) ($2 / $1) around it.
+const replaceMiseVersion = (value: string, target: string): string =>
+	value.trimStart().startsWith("{")
+		? value.replace(MISE_INLINE_VERSION, `$1$2${target}$2`)
+		: value.replace(MISE_STRING_VALUE, `$1${target}$1`);
+
+/**
+ * Rewrite the version of a single `[tools]` entry in a `mise.toml` in place,
+ * touching only the version literal. Crucially the full, quoted backend key
+ * (`"core:node"`, `"github:endevco/aube"`, `"aqua:aws/aws-cli"`,
+ * `"npm:@openai/codex"`) is preserved exactly — `mise use` would rewrite
+ * `"core:node"` to bare `node` and break uppy's backend identity contract.
+ * Indentation, quote style, inline-table options, and trailing comments are kept.
+ * Matches `pkg` against the unquoted key, the same identity {@link parseMiseToml}
+ * surfaces. Throws when no `[tools]` entry matches, so a stale upgrade never
+ * silently no-ops into an empty diff.
+ *
+ * Only the *first* matching entry is rewritten: the `updated` flag short-circuits
+ * the rest of the scan, so a duplicate key (mise rejects those anyway) is left
+ * untouched. The matched line is split into key and value via
+ * {@link assignmentIndex} and the version literal swapped by `replaceMiseVersion`.
+ */
+export function updateMiseToml(
+	content: string,
+	pkg: string,
+	target: string,
+): string {
+	let inTools = false;
+	let updated = false;
+	const lines = content.split("\n").map((raw) => {
+		if (updated) {
+			return raw;
+		}
+		const line = raw.trim();
+		if (line === "" || line.startsWith("#")) {
+			return raw;
+		}
+		if (line.startsWith("[")) {
+			inTools = line === "[tools]";
+			return raw;
+		}
+		const eq = inTools ? assignmentIndex(raw) : -1;
+		if (eq === -1 || unquote(raw.slice(0, eq).trim()) !== pkg) {
+			return raw;
+		}
+		updated = true;
+		return raw.slice(0, eq + 1) + replaceMiseVersion(raw.slice(eq + 1), target);
+	});
+	if (!updated) {
+		throw new Error(`no [tools] entry for ${pkg} in mise.toml`);
+	}
+	return lines.join("\n");
+}
+
 /** Parse `dependencies` and `devDependencies` of a package.json file. */
 export function parsePackageJson(content: string): Dependency[] {
 	const pkg = JSON.parse(content) as {

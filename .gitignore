@@ -3,6 +3,11 @@
 
 # dependencies
 node_modules/
+# foreign lockfiles — this project's package manager is apm/aube/mise
+package-lock.json
+bun.lock
+yarn.lock
+pnpm-lock.yaml
 
 # environment variables
 .env

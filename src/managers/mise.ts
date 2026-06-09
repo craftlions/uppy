@@ -6,6 +6,7 @@ import {
 	fetchFileContent,
 	parseMiseToml,
 	type SafeUpgrade,
+	updateMiseToml,
 } from "../deps.ts";
 import { runManagerUpgrade, type UpgradeParams } from "../workflows/sandbox.ts";
 
@@ -28,13 +29,30 @@ export const miseManager: Manager = {
 };
 
 /**
- * The shell command that updates a mise tool: `mise use <tool>@<target>` in the
- * full mise env at the repo root, so the user's existing `mise.toml` settings
- * are respected. The `package` is the full backend identity (e.g.
- * `npm:@openai/codex`); mise resolves it to the right backend.
+ * Update the `[tools]` entry for this upgrade directly in `mise.toml`, returning
+ * the rewritten file. Editing the TOML in place is what keeps the full, quoted
+ * mise backend key (e.g. `"core:node"`, `"github:endevco/aube"`) intact: the old
+ * `mise use <tool>@<target>` rewrote `"core:node"` to bare `node`, breaking
+ * uppy's backend identity contract, and also failed outright on a freshly cloned,
+ * untrusted config. {@link miseInstallCommand} validates the edit afterwards.
  */
-export function miseUpdateCommand(upgrade: SafeUpgrade): string {
-	return `mise use ${upgrade.package}@${upgrade.target}`;
+export function miseUpdateManifest(
+	content: string,
+	upgrade: SafeUpgrade,
+): string {
+	return updateMiseToml(content, upgrade.package, upgrade.target);
+}
+
+/**
+ * The shell command that validates a mise upgrade after the direct manifest edit:
+ * `mise trust -y` trusts the freshly cloned config (an untrusted config makes
+ * `mise install` exit non-zero), then `mise install` installs the new version and
+ * refreshes `mise.lock`. A non-zero `mise install` — for example when the new
+ * release would weaken lockfile provenance — is a failed safe upgrade: the
+ * sandbox surfaces its stderr and the run stops before any PR is published.
+ */
+export function miseInstallCommand(_upgrade: SafeUpgrade): string {
+	return "mise trust -y && mise install";
 }
 
 /**
@@ -54,7 +72,8 @@ export function miseCommitMessage(upgrade: SafeUpgrade): string {
 export class MiseWorkflow extends WorkflowEntrypoint<Env, UpgradeParams> {
 	async run(event: WorkflowEvent<UpgradeParams>, step: WorkflowStep) {
 		return runManagerUpgrade(this.env, step, event.payload, {
-			updateCommand: miseUpdateCommand,
+			editManifest: miseUpdateManifest,
+			updateCommand: miseInstallCommand,
 			commitMessage: miseCommitMessage,
 		});
 	}

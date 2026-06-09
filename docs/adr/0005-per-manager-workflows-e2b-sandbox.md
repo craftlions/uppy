@@ -17,9 +17,12 @@ published template `craftlions/uppy-base` (the single source of truth for the
 template name). The worker passes the installation token to the sandbox as
 `GIT_TOKEN` (`GIT_USERNAME=x-access-token`); the bot's git identity
 (`craftlions-uppy[bot]`) is configured separately. The sandbox clones the
-repository to `/home/user/workspace`, runs the Manager's static update command
-(`mise use <tool>@<target>` for mise; the hermetic `mise exec … aube add` for
-npm, with `--dev` for devDependencies), commits with `--signoff` and a
+repository to `/home/user/workspace`, applies the Manager's update (mise edits
+the `[tools]` version in `mise.toml` directly — preserving the full backend key
+`"core:node"`/`"github:…"` that `mise use` would corrupt — then runs
+`mise trust -y && mise install` to validate and refresh `mise.lock`; npm runs the
+hermetic `mise exec … aube add`, with `--dev` for devDependencies), commits with
+`--signoff` and a
 `chore(deps): …` subject, and force-pushes with `--force-with-lease` to the same
 `uppy/<manager>-<package>-<target>` branch so re-runs rebase rather than
 clobber and the PR number is preserved. A "no changes" outcome throws — no

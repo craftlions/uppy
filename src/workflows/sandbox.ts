@@ -100,6 +100,15 @@ interface SandboxUpgradeResult extends SandboxResult {
  * the Manager they serve.
  */
 export interface ManagerUpgradeSpec {
+	/**
+	 * An optional direct edit of the manifest at `upgrade.manifest`, applied inside
+	 * the sandbox before {@link updateCommand} runs. A pure transform from the
+	 * file's current content to its updated content. mise uses this to rewrite the
+	 * `[tools]` version in place — preserving its full backend key — rather than
+	 * letting a CLI rewrite (and corrupt) the key; managers whose CLI owns the
+	 * manifest leave it unset.
+	 */
+	editManifest?: (content: string, upgrade: SafeUpgrade) => string;
 	updateCommand: (upgrade: SafeUpgrade) => string;
 	commitMessage: (upgrade: SafeUpgrade) => string;
 }
@@ -481,6 +490,15 @@ export async function runManagerUpgrade(
 					cwd: WORKSPACE,
 				});
 				console.log(createBranch);
+				if (spec.editManifest) {
+					const manifestPath = `${WORKSPACE}/${params.upgrade.manifest}`;
+					const current = await sandbox.files.read(manifestPath);
+					await sandbox.files.write(
+						manifestPath,
+						spec.editManifest(current, params.upgrade),
+					);
+					console.log(`Updated ${params.upgrade.manifest} in place`);
+				}
 				const update = await runUpdateCommand(
 					sandbox,
 					spec.updateCommand(params.upgrade),
