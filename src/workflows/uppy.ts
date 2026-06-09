@@ -37,7 +37,11 @@ import {
 	logVulnerabilityAlerts,
 } from "../vulnerability-alerts.ts";
 import { DEFERRED_MANAGERS, managerWorkflowBinding } from "./dispatch.ts";
-import { BOT_NAME, type UpgradeParams } from "./sandbox.ts";
+import {
+	DASHBOARD_TITLE,
+	findDashboardIssue,
+	type UpgradeParams,
+} from "./sandbox.ts";
 
 type Params = { organization: string; repository: string };
 
@@ -240,24 +244,23 @@ export class UppyWorkflow extends WorkflowEntrypoint<Env, Params> {
 
 			await step.do("sync-dependency-dashboard-issue", async () => {
 				const { octokit } = await repositoryAccessFor(organization, repository);
-				const issues = await octokit.rest.issues.listForRepo({
-					owner: organization,
-					repo: repository,
-					state: "open",
-					creator: BOT_NAME,
-				});
-				if (issues.data.length > 0) {
+				const dashboard = await findDashboardIssue(
+					octokit,
+					organization,
+					repository,
+				);
+				if (dashboard) {
 					await octokit.rest.issues.update({
 						owner: organization,
 						repo: repository,
-						issue_number: issues.data[0].number,
+						issue_number: dashboard.number,
 						body: dashboardMarkdown,
 					});
 				} else {
 					await octokit.rest.issues.create({
 						owner: organization,
 						repo: repository,
-						title: "Uppy Dashboard",
+						title: DASHBOARD_TITLE,
 						body: dashboardMarkdown,
 					});
 				}

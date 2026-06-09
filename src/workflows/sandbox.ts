@@ -17,6 +17,42 @@ export const E2B_TEMPLATE = "craftlions/uppy-base";
 export const BOT_NAME = "craftlions-uppy[bot]";
 export const BOT_EMAIL = "craftlions-uppy[bot]@users.noreply.github.com";
 
+/** The title of the uppy-authored Dependency Dashboard issue. */
+export const DASHBOARD_TITLE = "Uppy Dashboard";
+
+type InstallationOctokit = Awaited<
+	ReturnType<GithubApp["getInstallationOctokit"]>
+>;
+
+/**
+ * Find the open uppy Dependency Dashboard issue, or undefined when none exists.
+ *
+ * GitHub's REST API returns pull requests as issues, so `listForRepo` includes
+ * uppy's own upgrade PRs alongside real issues. We must skip anything carrying a
+ * `pull_request` field — and match the dashboard title — otherwise the dashboard
+ * sync can land on a PR (newer than the dashboard, so first in the default
+ * created-desc order) and clobber its body instead of updating the dashboard.
+ * See https://github.com/craftlions/uppy/issues/10.
+ *
+ * Shared by {@link UppyWorkflow}'s dashboard sync and the PR-body dashboard link
+ * so the PR-vs-issue guard cannot drift between the two callers.
+ */
+export async function findDashboardIssue(
+	octokit: InstallationOctokit,
+	owner: string,
+	repo: string,
+): Promise<{ number: number; html_url: string } | undefined> {
+	const { data } = await octokit.rest.issues.listForRepo({
+		owner,
+		repo,
+		state: "open",
+		creator: BOT_NAME,
+	});
+	return data.find(
+		(issue) => !issue.pull_request && issue.title === DASHBOARD_TITLE,
+	);
+}
+
 /** Where every Manager workflow clones the target repository inside the sandbox. */
 export const WORKSPACE = "/home/user/workspace";
 
@@ -234,17 +270,16 @@ function isNotFound(error: unknown): boolean {
 
 /** The open uppy Dependency Dashboard issue URL, or undefined when none exists. */
 async function dashboardIssueUrl(
-	octokit: Awaited<ReturnType<GithubApp["getInstallationOctokit"]>>,
+	octokit: InstallationOctokit,
 	params: UpgradeParams,
 ): Promise<string | undefined> {
 	try {
-		const { data } = await octokit.rest.issues.listForRepo({
-			owner: params.organization,
-			repo: params.repository,
-			state: "open",
-			creator: BOT_NAME,
-		});
-		return data.find((issue) => !issue.pull_request)?.html_url;
+		const issue = await findDashboardIssue(
+			octokit,
+			params.organization,
+			params.repository,
+		);
+		return issue?.html_url;
 	} catch {
 		return undefined;
 	}
