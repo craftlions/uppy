@@ -4,7 +4,8 @@ import { NonRetryableError } from "cloudflare:workflows";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	miseCommitMessage,
-	miseUpdateCommand,
+	miseInstallCommand,
+	miseUpdateManifest,
 } from "../../src/managers/mise.ts";
 
 // Shared mutable state the import-level mocks read from. Each test assigns a
@@ -77,12 +78,20 @@ import {
 type Cmd = { exitCode: number; stdout: string; stderr: string };
 const OK: Cmd = { exitCode: 0, stdout: "", stderr: "" };
 
+/** The starting `mise.toml` the fake sandbox serves: the upgrade's `[tools]`
+ * entry at its current version, so an `editManifest` step has something to read
+ * and rewrite. */
+const INITIAL_MISE_TOML = '[tools]\n"npm:@openai/codex" = "0.63.0"\n';
+
 /** A fake e2b sandbox: git/commands/files/kill spies with sane SDK results. */
 function makeSandbox(opts?: {
 	runImpl?: (cmd: string) => Cmd;
 	stagedCount?: number;
+	miseToml?: string;
 }) {
-	const store: Record<string, string> = {};
+	const store: Record<string, string> = {
+		[`${WORKSPACE}/mise.toml`]: opts?.miseToml ?? INITIAL_MISE_TOML,
+	};
 	const run =
 		opts?.runImpl ??
 		((_cmd: string): Cmd => {
@@ -223,7 +232,8 @@ const params: UpgradeParams = {
 	upgrade,
 };
 const spec = {
-	updateCommand: miseUpdateCommand,
+	editManifest: miseUpdateManifest,
+	updateCommand: miseInstallCommand,
 	commitMessage: miseCommitMessage,
 };
 const env = { E2B_API_KEY: "k" } as unknown as Env;
@@ -340,9 +350,16 @@ describe("runManagerUpgrade", () => {
 		expect(sandbox.git.createBranch).toHaveBeenCalledWith(".", BRANCH, {
 			cwd: WORKSPACE,
 		});
-		expect(updateCommands(sandbox)).toEqual([
+		// mise edits mise.toml directly, preserving the full quoted backend key,
+		// then trusts + installs to validate — it no longer calls `mise use`.
+		expect(sandbox.files.write).toHaveBeenCalledWith(
+			`${WORKSPACE}/mise.toml`,
+			'[tools]\n"npm:@openai/codex" = "0.64.0"\n',
+		);
+		expect(updateCommands(sandbox)).toEqual(["mise trust -y && mise install"]);
+		expect(updateCommands(sandbox)).not.toContain(
 			"mise use npm:@openai/codex@0.64.0",
-		]);
+		);
 		expect(sandbox.git.add).toHaveBeenCalledWith(".", {
 			all: true,
 			cwd: WORKSPACE,
@@ -358,7 +375,8 @@ describe("runManagerUpgrade", () => {
 			base_tree: "basetree123",
 			tree: [
 				{
-					content: "",
+					// The blob carries the edited manifest the sandbox wrote and read back.
+					content: '[tools]\n"npm:@openai/codex" = "0.64.0"\n',
 					mode: "100644",
 					path: "mise.toml",
 					type: "blob",
@@ -461,13 +479,18 @@ describe("runManagerUpgrade", () => {
 		expect(octokit.rest.pulls.create).not.toHaveBeenCalled();
 	});
 
-	it("surfaces the stderr from a thrown CommandExitError, labelled with the failing operation", async () => {
+	it("surfaces the stderr from a real thrown mise install failure and publishes no PR", async () => {
+		// A non-zero `mise install` is a failed safe upgrade — e.g. the new release
+		// would weaken `mise.lock` provenance. e2b throws `CommandExitError` on the
+		// non-zero exit before uppy's manual handling runs, so without the catch the
+		// failure surfaces as a context-free `CommandExitError: exit status 1`.
 		const sandbox = makeSandbox({
 			runImpl: () => {
 				throw new h.CommandExitError({
 					exitCode: 1,
-					stderr: "mise: config file is not trusted",
-					stdout: "resolving npm:@openai/codex",
+					stderr:
+						"mise ERROR github:endevco/aube@1.18.2: lockfile provenance github-attestations is missing from the new release",
+					stdout: "mise trusted ~/workspace/mise.toml",
 				});
 			},
 		});
@@ -483,7 +506,7 @@ describe("runManagerUpgrade", () => {
 		expect(error).toBeInstanceOf(Error);
 		expect(error).toHaveProperty(
 			"message",
-			"update command failed (exit 1): mise: config file is not trusted\nresolving npm:@openai/codex",
+			"update command failed (exit 1): mise ERROR github:endevco/aube@1.18.2: lockfile provenance github-attestations is missing from the new release\nmise trusted ~/workspace/mise.toml",
 		);
 		expect(sandbox.kill).toHaveBeenCalled();
 		const octokit = h.octokit as ReturnType<typeof makeOctokit>;

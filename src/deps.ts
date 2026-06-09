@@ -263,6 +263,63 @@ export function parseMiseToml(content: string): Dependency[] {
 	return deps;
 }
 
+// The version literal inside an inline-table value, e.g. `version = "1.17.1"` in
+// `{ version = "1.17.1", os = ["linux"] }`. Groups: the `version = ` prefix and
+// the opening quote, so a replacement can swap only the version while keeping the
+// quote style and the surrounding options untouched.
+const MISE_INLINE_VERSION = /(version\s*=\s*)(["'])[^"']*\2/;
+// A bare quoted string value, e.g. `"1.17.1"`. The single capture is the quote
+// char, reused for both ends so the quote style is preserved.
+const MISE_STRING_VALUE = /(["'])[^"']*\1/;
+
+const replaceMiseVersion = (value: string, target: string): string =>
+	value.trimStart().startsWith("{")
+		? value.replace(MISE_INLINE_VERSION, `$1$2${target}$2`)
+		: value.replace(MISE_STRING_VALUE, `$1${target}$1`);
+
+/**
+ * Rewrite the version of a single `[tools]` entry in a `mise.toml` in place,
+ * touching only the version literal. Crucially the full, quoted backend key
+ * (`"core:node"`, `"github:endevco/aube"`, `"aqua:aws/aws-cli"`,
+ * `"npm:@openai/codex"`) is preserved exactly — `mise use` would rewrite
+ * `"core:node"` to bare `node` and break uppy's backend identity contract.
+ * Indentation, quote style, inline-table options, and trailing comments are kept.
+ * Matches `pkg` against the unquoted key, the same identity {@link parseMiseToml}
+ * surfaces. Throws when no `[tools]` entry matches, so a stale upgrade never
+ * silently no-ops into an empty diff.
+ */
+export function updateMiseToml(
+	content: string,
+	pkg: string,
+	target: string,
+): string {
+	let inTools = false;
+	let updated = false;
+	const lines = content.split("\n").map((raw) => {
+		if (updated) {
+			return raw;
+		}
+		const line = raw.trim();
+		if (line === "" || line.startsWith("#")) {
+			return raw;
+		}
+		if (line.startsWith("[")) {
+			inTools = line === "[tools]";
+			return raw;
+		}
+		const eq = inTools ? assignmentIndex(raw) : -1;
+		if (eq === -1 || unquote(raw.slice(0, eq).trim()) !== pkg) {
+			return raw;
+		}
+		updated = true;
+		return raw.slice(0, eq + 1) + replaceMiseVersion(raw.slice(eq + 1), target);
+	});
+	if (!updated) {
+		throw new Error(`no [tools] entry for ${pkg} in mise.toml`);
+	}
+	return lines.join("\n");
+}
+
 /** Parse `dependencies` and `devDependencies` of a package.json file. */
 export function parsePackageJson(content: string): Dependency[] {
 	const pkg = JSON.parse(content) as {
