@@ -65,7 +65,9 @@ import { getApp } from "../../src/github.ts";
 import {
 	BOT_EMAIL,
 	BOT_NAME,
+	DASHBOARD_TITLE,
 	E2B_TEMPLATE,
+	findDashboardIssue,
 	mintInstallationToken,
 	renderPrBody,
 	runManagerUpgrade,
@@ -264,6 +266,58 @@ describe("renderPrBody", () => {
 
 	it("omits the dashboard link when no issue url is given", () => {
 		expect(renderPrBody(upgrade, result)).not.toContain("Dependency Dashboard");
+	});
+});
+
+describe("findDashboardIssue", () => {
+	// A fake installation octokit exposing only `issues.listForRepo`, the one
+	// call findDashboardIssue makes.
+	const octokitWith = (data: unknown[]) =>
+		({
+			rest: { issues: { listForRepo: vi.fn(async () => ({ data })) } },
+		}) as unknown as Parameters<typeof findDashboardIssue>[0];
+
+	// Regression: https://github.com/craftlions/uppy/issues/10 — GitHub's REST
+	// API returns pull requests as issues, and uppy's own upgrade PRs are newer
+	// than the dashboard so they sort to index 0 under the default created-desc
+	// order. The old code updated `data[0]`, clobbering a PR body instead of the
+	// dashboard. The helper must skip anything with a `pull_request` field.
+	it("skips a bot-authored PR and selects the dashboard issue", async () => {
+		const octokit = octokitWith([
+			{
+				number: 42,
+				title: "chore(deps): update npm:@openai/codex from 0.63.0 to 0.64.0",
+				html_url: "https://github.com/craftlions/website/pull/42",
+				pull_request: { url: "https://github.com/craftlions/website/pull/42" },
+			},
+			{
+				number: 7,
+				title: DASHBOARD_TITLE,
+				html_url: "https://github.com/craftlions/website/issues/7",
+			},
+		]);
+
+		const issue = await findDashboardIssue(octokit, "craftlions", "website");
+
+		expect(issue?.number).toBe(7);
+		expect(issue?.html_url).toBe(
+			"https://github.com/craftlions/website/issues/7",
+		);
+	});
+
+	it("returns undefined when only a bot-authored PR is open", async () => {
+		const octokit = octokitWith([
+			{
+				number: 42,
+				title: "chore(deps): update npm:@openai/codex from 0.63.0 to 0.64.0",
+				html_url: "https://github.com/craftlions/website/pull/42",
+				pull_request: { url: "https://github.com/craftlions/website/pull/42" },
+			},
+		]);
+
+		await expect(
+			findDashboardIssue(octokit, "craftlions", "website"),
+		).resolves.toBeUndefined();
 	});
 });
 
