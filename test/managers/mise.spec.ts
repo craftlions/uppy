@@ -86,6 +86,16 @@ describe("miseUpdateManifest", () => {
 		);
 	});
 
+	it("rewrites the version field, never another inline-table key that ends in 'version'", () => {
+		// `version` is matched only as a whole inline-table key — a sibling key like
+		// `goversion` whose name ends in `version` must keep its own value.
+		const content =
+			'[tools]\n"npm:foo" = { goversion = "0.0.1", version = "1.2.3" }\n';
+		expect(
+			miseUpdateManifest(content, upgradeFor("npm:foo", "1.2.3", "1.3.0")),
+		).toBe('[tools]\n"npm:foo" = { goversion = "0.0.1", version = "1.3.0" }\n');
+	});
+
 	it("throws when no [tools] entry matches the upgrade", () => {
 		const content = '[tools]\n"core:node" = "26.3.0"\n';
 		expect(() =>

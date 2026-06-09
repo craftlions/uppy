@@ -263,11 +263,14 @@ export function parseMiseToml(content: string): Dependency[] {
 	return deps;
 }
 
-// The version literal inside an inline-table value, e.g. `version = "1.17.1"` in
-// `{ version = "1.17.1", os = ["linux"] }`. Groups: the `version = ` prefix and
-// the opening quote, so a replacement can swap only the version while keeping the
-// quote style and the surrounding options untouched.
-const MISE_INLINE_VERSION = /(version\s*=\s*)(["'])[^"']*\2/;
+// The `version` field of an inline-table value, e.g. the `version = "1.17.1"`
+// in `{ version = "1.17.1", os = ["linux"] }`. Anchored on the inline-table key
+// boundary — the opening `{` or a `,` separator — so `version` is matched only
+// as a whole key: a key that merely ends in `version` (e.g. `goversion`) and any
+// option value that contains the text are never mistaken for it. Captures the
+// boundary + key + `=` prefix and the opening quote, so a replacement swaps only
+// the version while keeping spacing, quote style, and the other options intact.
+const MISE_INLINE_VERSION = /([{,]\s*version\s*=\s*)(["'])[^"']*\2/;
 // A bare quoted string value, e.g. `"1.17.1"`. The single capture is the quote
 // char, reused for both ends so the quote style is preserved.
 const MISE_STRING_VALUE = /(["'])[^"']*\1/;
