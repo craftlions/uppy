@@ -275,6 +275,12 @@ const MISE_INLINE_VERSION = /([{,]\s*version\s*=\s*)(["'])[^"']*\2/;
 // char, reused for both ends so the quote style is preserved.
 const MISE_STRING_VALUE = /(["'])[^"']*\1/;
 
+// In the replacement strings below `${target}` is template-literal
+// interpolation, evaluated at runtime *before* `String.prototype.replace` is
+// even called, whereas `$1` and `$2` are regex backreferences resolved *by*
+// replace against the captured groups of MISE_INLINE_VERSION / MISE_STRING_VALUE.
+// The order is intentional: `${target}` is injected into the literal first, then
+// replace re-emits the captured key/prefix ($1) and quote(s) ($2 / $1) around it.
 const replaceMiseVersion = (value: string, target: string): string =>
 	value.trimStart().startsWith("{")
 		? value.replace(MISE_INLINE_VERSION, `$1$2${target}$2`)
@@ -290,6 +296,11 @@ const replaceMiseVersion = (value: string, target: string): string =>
  * Matches `pkg` against the unquoted key, the same identity {@link parseMiseToml}
  * surfaces. Throws when no `[tools]` entry matches, so a stale upgrade never
  * silently no-ops into an empty diff.
+ *
+ * Only the *first* matching entry is rewritten: the `updated` flag short-circuits
+ * the rest of the scan, so a duplicate key (mise rejects those anyway) is left
+ * untouched. The matched line is split into key and value via
+ * {@link assignmentIndex} and the version literal swapped by `replaceMiseVersion`.
  */
 export function updateMiseToml(
 	content: string,
