@@ -9,16 +9,42 @@ import {
 
 // Shared mutable state the import-level mocks read from. Each test assigns a
 // fresh fake octokit / sandbox before driving the workflow.
-const h = vi.hoisted(() => ({
-	sandbox: null as unknown,
-	octokit: null as unknown,
-	createInstallationAccessToken: vi.fn(async () => ({
-		data: { token: "tok-xyz" },
-	})),
-}));
+const h = vi.hoisted(() => {
+	// Mirror e2b's `CommandExitError`: thrown by `commands.run` on any non-zero
+	// exit and carrying the command's exit code / stdout / stderr. Hoisted so the
+	// `vi.mock("e2b")` factory below can re-export it.
+	class CommandExitError extends Error {
+		exitCode: number;
+		stdout: string;
+		stderr: string;
+		error?: string;
+		constructor(result: {
+			exitCode: number;
+			stdout: string;
+			stderr: string;
+			error?: string;
+		}) {
+			super(`exit status ${result.exitCode}`);
+			this.name = "CommandExitError";
+			this.exitCode = result.exitCode;
+			this.stdout = result.stdout;
+			this.stderr = result.stderr;
+			this.error = result.error;
+		}
+	}
+	return {
+		sandbox: null as unknown,
+		octokit: null as unknown,
+		createInstallationAccessToken: vi.fn(async () => ({
+			data: { token: "tok-xyz" },
+		})),
+		CommandExitError,
+	};
+});
 
 vi.mock("e2b", () => ({
 	Sandbox: { create: vi.fn(async () => h.sandbox) },
+	CommandExitError: h.CommandExitError,
 }));
 
 vi.mock("../../src/github.ts", () => ({
@@ -435,20 +461,47 @@ describe("runManagerUpgrade", () => {
 		expect(octokit.rest.pulls.create).not.toHaveBeenCalled();
 	});
 
-	it("labels update command exit errors with the failing operation", async () => {
+	it("surfaces the stderr from a thrown CommandExitError, labelled with the failing operation", async () => {
 		const sandbox = makeSandbox({
-			runImpl: () => ({
-				exitCode: 1,
-				stderr: "failed to update",
-				stdout: "",
-			}),
+			runImpl: () => {
+				throw new h.CommandExitError({
+					exitCode: 1,
+					stderr: "mise: config file is not trusted",
+					stdout: "resolving npm:@openai/codex",
+				});
+			},
 		});
 		h.sandbox = sandbox;
 		h.octokit = makeOctokit({ closed: [], open: [] });
 
-		await expect(runManagerUpgrade(env, step, params, spec)).rejects.toThrow(
-			"update command failed (exit 1): failed to update",
+		const error = await runManagerUpgrade(env, step, params, spec).catch(
+			(caught: unknown) => caught,
 		);
+
+		// The bare `CommandExitError: exit status 1` is replaced by the rich,
+		// stderr-bearing message; both stderr and stdout are surfaced.
+		expect(error).toBeInstanceOf(Error);
+		expect(error).toHaveProperty(
+			"message",
+			"update command failed (exit 1): mise: config file is not trusted\nresolving npm:@openai/codex",
+		);
+		expect(sandbox.kill).toHaveBeenCalled();
+		const octokit = h.octokit as ReturnType<typeof makeOctokit>;
+		expect(octokit.rest.git.createCommit).not.toHaveBeenCalled();
+		expect(octokit.rest.pulls.create).not.toHaveBeenCalled();
+	});
+
+	it("rethrows non-CommandExitError failures from the update command untouched", async () => {
+		const boom = new Error("network down");
+		const sandbox = makeSandbox({
+			runImpl: () => {
+				throw boom;
+			},
+		});
+		h.sandbox = sandbox;
+		h.octokit = makeOctokit({ closed: [], open: [] });
+
+		await expect(runManagerUpgrade(env, step, params, spec)).rejects.toBe(boom);
 		expect(sandbox.kill).toHaveBeenCalled();
 	});
 });

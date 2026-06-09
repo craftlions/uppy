@@ -2,7 +2,7 @@ import type { WorkflowStep } from "cloudflare:workers";
 import type { Sandbox } from "e2b";
 import type { SafeUpgrade } from "../deps.ts";
 import { NonRetryableError } from "cloudflare:workflows";
-import { Sandbox as E2bSandbox } from "e2b";
+import { CommandExitError, Sandbox as E2bSandbox } from "e2b";
 import { type GithubApp, getApp } from "../github.ts";
 import { safeUpgradeBranch } from "./branches.ts";
 
@@ -149,8 +149,10 @@ export function renderPrBody(
 
 interface CommandResultLike {
 	exitCode: number;
-	error?: string;
-	stdout?: string;
+	// `| undefined` is explicit so e2b's `CommandExitError` — whose `error` getter
+	// is typed `string | undefined` — is assignable under exactOptionalPropertyTypes.
+	error?: string | undefined;
+	stdout?: string | undefined;
 	stderr: string;
 }
 
@@ -161,6 +163,31 @@ function commandFailed(label: string, result: CommandResultLike): Error {
 	return new Error(
 		`${label} failed (exit ${result.exitCode})${details ? `: ${details}` : ""}`,
 	);
+}
+
+/**
+ * Run the Manager's update command inside the sandbox and translate a non-zero
+ * exit into a rich, stderr-bearing error. e2b's `commands.run` throws
+ * `CommandExitError` on any non-zero exit by default, so without this catch the
+ * failure surfaces as a context-free `CommandExitError: exit status 1` and the
+ * stderr that explains *why* it failed is lost. We rethrow via {@link
+ * commandFailed} so the cause survives; any non-exit error (network, timeout)
+ * propagates untouched.
+ */
+async function runUpdateCommand(sandbox: Sandbox, command: string) {
+	try {
+		return await sandbox.commands.run(command, {
+			cwd: WORKSPACE,
+			timeoutMs: 300_000,
+			onStderr: (chunk) => console.error(`STDERR: ${chunk}`),
+			onStdout: (chunk) => console.log(`STDOUT: ${chunk}`),
+		});
+	} catch (error) {
+		if (error instanceof CommandExitError) {
+			throw commandFailed("update command", error);
+		}
+		throw error;
+	}
 }
 
 function commitMessageWithSignoff(message: string): string {
@@ -419,19 +446,11 @@ export async function runManagerUpgrade(
 					cwd: WORKSPACE,
 				});
 				console.log(createBranch);
-				const update = await sandbox.commands.run(
+				const update = await runUpdateCommand(
+					sandbox,
 					spec.updateCommand(params.upgrade),
-					{
-						cwd: WORKSPACE,
-						timeoutMs: 300_000,
-						onStderr: (chunk) => console.error(`STDERR: ${chunk}`),
-						onStdout: (chunk) => console.log(`STDOUT: ${chunk}`),
-					},
 				);
 				console.log(update);
-				if (update.exitCode !== 0) {
-					throw commandFailed("update command", update);
-				}
 				const add = await sandbox.git.add(".", { all: true, cwd: WORKSPACE });
 				console.log(add);
 				const status = await sandbox.git.status(".", { cwd: WORKSPACE });
