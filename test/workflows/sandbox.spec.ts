@@ -4,6 +4,7 @@ import { NonRetryableError } from "cloudflare:workflows";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	miseCommitMessage,
+	miseCommitMessageGrouped,
 	miseInstallCommand,
 	miseUpdateManifest,
 } from "../../src/managers/mise.ts";
@@ -18,12 +19,12 @@ const h = vi.hoisted(() => {
 		exitCode: number;
 		stdout: string;
 		stderr: string;
-		error?: string;
+		error?: string | undefined;
 		constructor(result: {
 			exitCode: number;
 			stdout: string;
 			stderr: string;
-			error?: string;
+			error?: string | undefined;
 		}) {
 			super(`exit status ${result.exitCode}`);
 			this.name = "CommandExitError";
@@ -76,6 +77,7 @@ import {
 	WORKSPACE,
 	withSandbox,
 } from "../../src/workflows/sandbox.ts";
+import { safeUpgradeGroupBranch } from "../../src/workflows/branches.ts";
 
 type Cmd = { exitCode: number; stdout: string; stderr: string };
 const OK: Cmd = { exitCode: 0, stdout: "", stderr: "" };
@@ -226,17 +228,55 @@ const upgrade: SafeUpgrade = {
 };
 const BRANCH = "uppy/mise-npm-openai-codex-0.64.0";
 
+const astroAlpha: SafeUpgrade = {
+	manager: "mise",
+	manifest: "mise.toml",
+	package: "npm:@astrojs/alpha",
+	current: "1.0.0",
+	target: "1.1.0",
+	updateType: "minor",
+	groupName: "Astro",
+};
+const astroBeta: SafeUpgrade = {
+	manager: "mise",
+	manifest: "mise.toml",
+	package: "npm:@astrojs/beta",
+	current: "2.0.0",
+	target: "2.1.0",
+	updateType: "minor",
+	groupName: "Astro",
+};
+const GROUPED_BRANCH = safeUpgradeGroupBranch("mise", "Astro", [
+	astroAlpha,
+	astroBeta,
+]);
+const GROUPED_MISE_TOML =
+	'[tools]\n"npm:@astrojs/alpha" = "1.0.0"\n"npm:@astrojs/beta" = "2.0.0"\n';
+
 const params: UpgradeParams = {
 	organization: "craftlions",
 	repository: "website",
 	defaultBranch: "main",
 	installationId: 42,
-	upgrade,
+	upgrades: [upgrade],
+};
+const groupedParams: UpgradeParams = {
+	organization: "craftlions",
+	repository: "website",
+	defaultBranch: "main",
+	installationId: 42,
+	upgrades: [astroAlpha, astroBeta],
 };
 const spec = {
 	editManifest: miseUpdateManifest,
 	updateCommand: miseInstallCommand,
 	commitMessage: miseCommitMessage,
+};
+const groupedSpec = {
+	editManifest: miseUpdateManifest,
+	updateCommand: miseInstallCommand,
+	commitMessage: miseCommitMessage,
+	commitMessageGrouped: miseCommitMessageGrouped,
 };
 const env = { E2B_API_KEY: "k" } as unknown as Env;
 
@@ -264,7 +304,7 @@ describe("renderPrBody", () => {
 	};
 
 	it("renders the structured header, diff, and dashboard link", () => {
-		const body = renderPrBody(upgrade, result, "https://gh/issues/1");
+		const body = renderPrBody([upgrade], result, "https://gh/issues/1");
 		expect(body).toContain("| Package | `npm:@openai/codex` |");
 		expect(body).toContain("| From | `0.63.0` |");
 		expect(body).toContain("| To | `0.64.0` |");
@@ -275,7 +315,17 @@ describe("renderPrBody", () => {
 	});
 
 	it("omits the dashboard link when no issue url is given", () => {
-		expect(renderPrBody(upgrade, result)).not.toContain("Dependency Dashboard");
+		expect(renderPrBody([upgrade], result)).not.toContain("Dependency Dashboard");
+	});
+
+	it("renders multiple upgrades in one PR body", () => {
+		const body = renderPrBody([astroAlpha, astroBeta], result);
+		expect(body).toContain("| Package | `npm:@astrojs/alpha` |");
+		expect(body).toContain("| Package | `npm:@astrojs/beta` |");
+		expect(body).toContain("| From | `1.0.0` |");
+		expect(body).toContain("| To | `1.1.0` |");
+		expect(body).toContain("| From | `2.0.0` |");
+		expect(body).toContain("| To | `2.1.0` |");
 	});
 });
 
@@ -462,11 +512,13 @@ describe("runManagerUpgrade", () => {
 		});
 		expect(octokit.rest.pulls.update).not.toHaveBeenCalled();
 		expect(octokit.rest.pulls.create).toHaveBeenCalledTimes(1);
-		expect(octokit.rest.pulls.create.mock.calls[0][0]).toMatchObject({
-			base: "main",
-			head: BRANCH,
-			title: "chore(deps): update npm:@openai/codex from 0.63.0 to 0.64.0",
-		});
+		expect(octokit.rest.pulls.create).toHaveBeenCalledWith(
+			expect.objectContaining({
+				base: "main",
+				head: BRANCH,
+				title: "chore(deps): update npm:@openai/codex from 0.63.0 to 0.64.0",
+			}),
+		);
 	});
 
 	it("updates the existing open PR instead of opening a new one", async () => {
@@ -494,9 +546,45 @@ describe("runManagerUpgrade", () => {
 		});
 		expect(octokit.rest.pulls.create).not.toHaveBeenCalled();
 		expect(octokit.rest.pulls.update).toHaveBeenCalledTimes(1);
-		expect(octokit.rest.pulls.update.mock.calls[0][0]).toMatchObject({
-			pull_number: 7,
+		expect(octokit.rest.pulls.update).toHaveBeenCalledWith(
+			expect.objectContaining({
+				pull_number: 7,
+			}),
+		);
+	});
+
+	it("groups upgrades by groupName into a single branch/PR", async () => {
+		const sandbox = makeSandbox({ miseToml: GROUPED_MISE_TOML });
+		h.sandbox = sandbox;
+		h.octokit = makeOctokit({ closed: [], open: [] });
+
+		const result = await runManagerUpgrade(
+			env,
+			step,
+			groupedParams,
+			groupedSpec,
+		);
+		expect(result).toMatchObject({
+			commitSha: "deadbeef",
+			branch: GROUPED_BRANCH,
+			filesChanged: 1,
 		});
+		expect(sandbox.git.createBranch).toHaveBeenCalledWith(".", GROUPED_BRANCH, {
+			cwd: WORKSPACE,
+		});
+		expect(sandbox.files.write).toHaveBeenCalledWith(
+			`${WORKSPACE}/mise.toml`,
+			'[tools]\n"npm:@astrojs/alpha" = "1.1.0"\n"npm:@astrojs/beta" = "2.1.0"\n',
+		);
+		const octokit = h.octokit as ReturnType<typeof makeOctokit>;
+		expect(octokit.rest.pulls.create).toHaveBeenCalledTimes(1);
+		expect(octokit.rest.pulls.create).toHaveBeenCalledWith(
+			expect.objectContaining({
+				base: "main",
+				head: GROUPED_BRANCH,
+				title: "chore(deps): update Astro (npm:@astrojs/alpha, npm:@astrojs/beta)",
+			}),
+		);
 	});
 
 	it("short-circuits to no-op when a closed PR exists, never touching a sandbox", async () => {

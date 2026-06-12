@@ -131,6 +131,7 @@ export interface SafeUpgrade {
 	target: string;
 	updateType: string;
 	depType?: string;
+	groupName?: string;
 }
 
 export type UpdateRecord = Record<string, UpdateStatus>;
@@ -169,7 +170,8 @@ const extractMiseVersion = (rawValue: string): string => {
 	// Inline table form, e.g. { version = "1.17.1", os = ["linux"] }
 	if (rawValue.startsWith("{")) {
 		const match = rawValue.match(INLINE_VERSION);
-		return match ? match[1] : "";
+		const version = match?.[1];
+		return version === undefined ? "" : version;
 	}
 	return unquote(rawValue);
 };
@@ -197,9 +199,26 @@ function dependencyForMiseTool(name: string, version: string): Dependency {
 		};
 	}
 	const [, backend, lookupName] = match;
+	if (backend === undefined || lookupName === undefined) {
+		return {
+			name,
+			version,
+			pinned: isPinnedVersion(version),
+			unsupportedReason: "unexpected mise backend identity",
+		};
+	}
+	const datasource = SUPPORTED_MISE_BACKENDS[backend];
+	if (datasource === undefined) {
+		return {
+			name,
+			version,
+			pinned: isPinnedVersion(version),
+			unsupportedReason: "unsupported mise backend identity",
+		};
+	}
 	return {
 		name,
-		datasource: SUPPORTED_MISE_BACKENDS[backend],
+		datasource,
 		lookupName,
 		version,
 		pinned: isPinnedVersion(version),
@@ -425,6 +444,11 @@ const updateForDependency = (
 export function listSafeUpgrades(
 	managerDependencies: ManagerDependencies[],
 	updates?: UpdateRecords,
+	resolveGroupName?: (dep: {
+		name: string;
+		depType?: string;
+		updateType?: string;
+	}) => string | undefined,
 ): SafeUpgrade[] {
 	if (!updates) {
 		return [];
@@ -440,6 +464,16 @@ export function listSafeUpgrades(
 			for (const dep of file.dependencies) {
 				const status = updateForDependency(managerUpdates, dependencyKey(dep));
 				if (status?.target) {
+					const groupDep: {
+						name: string;
+						updateType: string;
+						depType?: string;
+					} = {
+						name: dep.name,
+						updateType: status.updateType,
+						...(dep.depType !== undefined ? { depType: dep.depType } : {}),
+					};
+					const groupName = resolveGroupName?.(groupDep);
 					upgrades.push({
 						manager: group.manager,
 						manifest: file.file,
@@ -447,7 +481,8 @@ export function listSafeUpgrades(
 						current: status.current,
 						target: status.target,
 						updateType: status.updateType,
-						depType: dep.depType,
+						...(dep.depType !== undefined ? { depType: dep.depType } : {}),
+						...(groupName !== undefined ? { groupName } : {}),
 					});
 				}
 			}

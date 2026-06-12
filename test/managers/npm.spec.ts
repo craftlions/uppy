@@ -1,6 +1,11 @@
 import type { SafeUpgrade } from "../../src/deps.ts";
 import { describe, expect, it } from "vitest";
-import { npmCommitMessage, npmUpdateCommand } from "../../src/managers/npm.ts";
+import {
+	npmCommitMessage,
+	npmCommitMessageGrouped,
+	npmUpdateCommand,
+	npmUpdateCommandGrouped,
+} from "../../src/managers/npm.ts";
 
 const base: SafeUpgrade = {
 	manager: "npm",
@@ -33,6 +38,36 @@ describe("npmCommitMessage", () => {
 	it("renders the structured chore(deps) subject", () => {
 		expect(npmCommitMessage(base)).toBe(
 			"chore(deps): update @octokit/core from 7.0.5 to 7.0.6",
+		);
+	});
+});
+
+describe("npmUpdateCommandGrouped", () => {
+	it("chains aube add commands for every package", () => {
+		expect(
+			npmUpdateCommandGrouped([
+				base,
+				{ ...base, package: "vitest", depType: "devDependencies" },
+			]),
+		).toBe(
+			"mise --no-config --no-env --no-hooks exec aube@latest node@latest -- aube add @octokit/core@7.0.6 && mise --no-config --no-env --no-hooks exec aube@latest node@latest -- aube add vitest@7.0.6 -D",
+		);
+	});
+});
+
+describe("npmCommitMessageGrouped", () => {
+	it("includes the group name and every package", () => {
+		expect(
+			npmCommitMessageGrouped([
+				{ ...base, groupName: "MyGroup" },
+				{ ...base, package: "vitest", groupName: "MyGroup" },
+			]),
+		).toBe("chore(deps): update MyGroup (@octokit/core, vitest)");
+	});
+
+	it("falls back to a plain package list when groupName is missing", () => {
+		expect(npmCommitMessageGrouped([base, { ...base, package: "vitest" }])).toBe(
+			"chore(deps): update @octokit/core, vitest",
 		);
 	});
 });

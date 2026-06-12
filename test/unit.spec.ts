@@ -358,4 +358,68 @@ describe("listSafeUpgrades", () => {
 			},
 		]);
 	});
+
+	it("attaches groupName when a resolveGroupName callback is provided", () => {
+		const upgrades = listSafeUpgrades(
+			[
+				{
+					manager: "npm",
+					files: [
+						{
+							file: "package.json",
+							dependencies: [
+								{
+									name: "astro",
+									version: "1.0.0",
+									depType: "dependencies",
+								},
+								{
+									name: "react",
+									version: "18.0.0",
+									depType: "dependencies",
+								},
+							],
+						},
+					],
+				},
+			],
+			{
+				astro: {
+					current: "1.0.0",
+					target: "1.1.0",
+					updateType: "minor",
+					state: "safe",
+				},
+				react: {
+					current: "18.0.0",
+					target: "18.1.0",
+					updateType: "minor",
+					state: "safe",
+				},
+			},
+			(dep) => (dep.name === "astro" ? "Astro" : undefined),
+		);
+
+		expect(upgrades).toEqual([
+			{
+				manager: "npm",
+				manifest: "package.json",
+				package: "astro",
+				current: "1.0.0",
+				target: "1.1.0",
+				updateType: "minor",
+				depType: "dependencies",
+				groupName: "Astro",
+			},
+			{
+				manager: "npm",
+				manifest: "package.json",
+				package: "react",
+				current: "18.0.0",
+				target: "18.1.0",
+				updateType: "minor",
+				depType: "dependencies",
+			},
+		]);
+	});
 });

@@ -409,4 +409,68 @@ describe("renderDependencyDashboard", () => {
 			"| `actions/setup-node` | `aaaaaaa` | — | ✅ up to date | `.github/workflows/ci.yml` |",
 		);
 	});
+
+	it("renders grouped npm dependencies under group sub-headers", () => {
+		const dashboard = renderDependencyDashboard(
+			input({
+				managerDependencies: [
+					{
+						manager: "npm",
+						files: [
+							{
+								file: "package.json",
+								dependencies: [
+									{
+										name: "astro",
+										version: "1.0.0",
+										depType: "dependencies",
+									},
+									{
+										name: "@astrojs/rss",
+										version: "1.0.0",
+										depType: "dependencies",
+									},
+									{ name: "react", version: "18.0.0", depType: "dependencies" },
+								],
+							},
+						],
+					},
+				],
+				updatesByManager: {
+					npm: {
+						astro: {
+							current: "1.0.0",
+							target: "1.1.0",
+							updateType: "minor",
+							state: "safe",
+						},
+						"@astrojs/rss": {
+							current: "1.0.0",
+							target: "1.1.0",
+							updateType: "minor",
+							state: "safe",
+						},
+						react: {
+							current: "18.0.0",
+							target: "18.1.0",
+							updateType: "minor",
+							state: "safe",
+						},
+					},
+				},
+				groups: {
+					npm: {
+						astro: "Astro",
+						"@astrojs/rss": "Astro",
+					},
+				},
+			}),
+		);
+
+		expect(dashboard).toContain("#### Astro");
+		expect(dashboard).toContain("| `astro` | `1.0.0` | `1.1.0` | 🟢 minor (safe) | `package.json` |");
+		expect(dashboard).toContain("| `@astrojs/rss` | `1.0.0` | `1.1.0` | 🟢 minor (safe) | `package.json` |");
+		expect(dashboard).toContain("#### Ungrouped");
+		expect(dashboard).toContain("| `react` | `18.0.0` | `18.1.0` | 🟢 minor (safe) | `package.json` |");
+	});
 });
