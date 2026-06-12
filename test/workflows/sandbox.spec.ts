@@ -387,10 +387,7 @@ describe("runManagerUpgrade", () => {
 			repositories: ["website"],
 		});
 		expect(sandbox.git.configureUser).toHaveBeenCalledWith(BOT_NAME, BOT_EMAIL);
-		expect(sandbox.git.dangerouslyAuthenticate).toHaveBeenCalledWith({
-			username: "x-access-token",
-			password: "tok-xyz",
-		});
+		expect(sandbox.git.dangerouslyAuthenticate).not.toHaveBeenCalled();
 		expect(sandbox.git.clone).toHaveBeenCalledWith(
 			"https://github.com/craftlions/website.git",
 			expect.objectContaining({

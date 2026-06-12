@@ -14,8 +14,14 @@ dispatch, so the dashboard stays accurate without running no-op work.
 Each Manager workflow owns the full sandbox → commit → push → PR cycle in one
 instance. It runs inside an [e2b](https://e2b.dev) sandbox booted from the
 published template `craftlions/uppy-base` (the single source of truth for the
-template name). The worker passes the installation token to the sandbox as
-`GIT_TOKEN` (`GIT_USERNAME=x-access-token`); the bot's git identity
+template name). The worker passes the installation token to the sandbox only as
+inline credentials on the `git clone` call (`username: "x-access-token"`,
+`password: <installationToken>`); e2b strips these credentials from the remote
+URL after cloning, so no on-disk copy remains. The `dangerouslyAuthenticate`
+credential-helper write is deliberately **not** called — the token must never
+persist inside the sandbox because the untrusted update command runs next with
+internet access, and publishing happens via the GitHub API from the worker (the
+sandbox never needs the token again after the clone). The bot's git identity
 (`craftlions-uppy[bot]`) is configured separately. The sandbox clones the
 repository to `/home/user/workspace`, applies the Manager's update (mise edits
 the `[tools]` version in `mise.toml` directly — preserving the full backend key
@@ -49,6 +55,22 @@ returns `"no-op"`, an open PR is updated, and the absence of a PR creates one.
 - **A long-lived or per-child token** — rejected. The orchestrator mints one
   short-lived installation token per run and threads it to every child, so the
   audit trail is per-installation and the credentials do not outlive the run.
+- **Persist credentials for reuse via `dangerouslyAuthenticate`** — rejected.
+  The credential-helper write left an on-disk copy of the installation token
+  inside the sandbox that a malicious dependency's install scripts could read
+  and exfiltrate. The clone already authenticates with inline credentials, and
+  publishing happens via the GitHub API from the worker, so persistence was
+  pure redundancy.
+- **Scrub-after (authenticate-then-clear)** — rejected in favor of never-persist.
+  A scrub leaves a window between persist and clear, and e2b does not cleanly
+  document the teardown path. Never persisting closes the window entirely.
+- **`--ignore-scripts` / scripts-disabled** — deliberately dropped from scope.
+  Token removal fully closes the token-exfiltration threat. The residual risk
+  that an install script runs arbitrary code (e.g. exfiltrating cloned repo
+  contents, or writing files staged into the PR) is bounded by the sandbox
+  lifecycle (always killed in `finally`), human diff review of the PR, and the
+  Minimum release age 3-day floor, which is uppy's actual supply-chain
+  prevention.
 
 ## Consequences
 
