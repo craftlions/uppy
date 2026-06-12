@@ -114,8 +114,9 @@ export interface ManagerUpgradeSpec {
 	editManifest?: (content: string, upgrade: SafeUpgrade) => string;
 	/**
 	 * Optional grouped variant of {@link editManifest}. Receives the manifest
-	 * content and the full upgrade group. When absent, grouped upgrades fall back
-	 * to applying {@link editManifest} for each upgrade sequentially.
+	 * content and the subset of upgrades that target the current manifest. When
+	 * absent, grouped upgrades fall back to applying {@link editManifest} for each
+	 * upgrade sequentially.
 	 */
 	editManifestGrouped?: (content: string, upgrades: SafeUpgrade[]) => string;
 	updateCommand: (upgrade: SafeUpgrade) => string;
@@ -195,17 +196,16 @@ export function renderPrBody(
 	if (upgrades.length === 0) {
 		throw new Error("renderPrBody requires at least one upgrade");
 	}
-	const lines = ["| | |", "| --- | --- |"];
+	const lines = [
+		"| Package | From | To | Manifest | Bump type |",
+		"| --- | --- | --- | --- | --- |",
+	];
 	for (const upgrade of upgrades) {
 		lines.push(
-			`| Package | \`${upgrade.package}\` |`,
-			`| From | \`${upgrade.current}\` |`,
-			`| To | \`${upgrade.target}\` |`,
-			`| Manifest | \`${upgrade.manifest}\` |`,
-			`| Bump type | ${upgrade.updateType} |`,
-			"",
+			`| \`${upgrade.package}\` | \`${upgrade.current}\` | \`${upgrade.target}\` | \`${upgrade.manifest}\` | ${upgrade.updateType} |`,
 		);
 	}
+	lines.push("");
 	if (dashboardIssueUrl) {
 		lines.push(
 			`See the uppy [Dependency Dashboard](${dashboardIssueUrl}) for the broader context.`,
@@ -429,8 +429,8 @@ async function publishBranchFromChanges(
 	return commit.data.sha;
 }
 
-function normalizeUpgrades(params: UpgradeParams): SafeUpgrade[] {
-	if (params.upgrades.length > 0) {
+export function normalizeUpgrades(params: UpgradeParams): SafeUpgrade[] {
+	if (params.upgrades && params.upgrades.length > 0) {
 		return params.upgrades;
 	}
 	if (params.upgrade) {

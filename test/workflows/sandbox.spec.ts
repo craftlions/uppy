@@ -71,6 +71,7 @@ import {
 	E2B_TEMPLATE,
 	findDashboardIssue,
 	mintInstallationToken,
+	normalizeUpgrades,
 	renderPrBody,
 	runManagerUpgrade,
 	type UpgradeParams,
@@ -303,13 +304,15 @@ describe("renderPrBody", () => {
 		filesChanged: 1,
 	};
 
-	it("renders the structured header, diff, and dashboard link", () => {
+	it("renders the structured table, diff, and dashboard link", () => {
 		const body = renderPrBody([upgrade], result, "https://gh/issues/1");
-		expect(body).toContain("| Package | `npm:@openai/codex` |");
-		expect(body).toContain("| From | `0.63.0` |");
-		expect(body).toContain("| To | `0.64.0` |");
-		expect(body).toContain("| Manifest | `mise.toml` |");
-		expect(body).toContain("| Bump type | minor |");
+		expect(body).toContain(
+			"| Package | From | To | Manifest | Bump type |",
+		);
+		expect(body).toContain("| --- | --- | --- | --- | --- |");
+		expect(body).toContain(
+			"| `npm:@openai/codex` | `0.63.0` | `0.64.0` | `mise.toml` | minor |",
+		);
 		expect(body).toContain("[Dependency Dashboard](https://gh/issues/1)");
 		expect(body).toContain("```diff");
 	});
@@ -318,14 +321,45 @@ describe("renderPrBody", () => {
 		expect(renderPrBody([upgrade], result)).not.toContain("Dependency Dashboard");
 	});
 
-	it("renders multiple upgrades in one PR body", () => {
+	it("renders multiple upgrades in one table", () => {
 		const body = renderPrBody([astroAlpha, astroBeta], result);
-		expect(body).toContain("| Package | `npm:@astrojs/alpha` |");
-		expect(body).toContain("| Package | `npm:@astrojs/beta` |");
-		expect(body).toContain("| From | `1.0.0` |");
-		expect(body).toContain("| To | `1.1.0` |");
-		expect(body).toContain("| From | `2.0.0` |");
-		expect(body).toContain("| To | `2.1.0` |");
+		const headerCount = (body.match(/\| Package \| From \| To \| Manifest \| Bump type \|/g) ?? [])
+			.length;
+		expect(headerCount).toBe(1);
+		expect(body).toContain(
+			"| `npm:@astrojs/alpha` | `1.0.0` | `1.1.0` | `mise.toml` | minor |",
+		);
+		expect(body).toContain(
+			"| `npm:@astrojs/beta` | `2.0.0` | `2.1.0` | `mise.toml` | minor |",
+		);
+	});
+});
+
+describe("normalizeUpgrades", () => {
+	it("prefers the upgrades array when present", () => {
+		expect(normalizeUpgrades({ ...params, upgrades: [upgrade] })).toEqual([
+			upgrade,
+		]);
+	});
+
+	it("falls back to the deprecated upgrade field when upgrades is missing", () => {
+		const { upgrades: _, ...rest } = params;
+		expect(
+			normalizeUpgrades({ ...rest, upgrade } as unknown as UpgradeParams),
+		).toEqual([upgrade]);
+	});
+
+	it("falls back to the deprecated upgrade field when upgrades is empty", () => {
+		expect(normalizeUpgrades({ ...params, upgrades: [], upgrade })).toEqual([
+			upgrade,
+		]);
+	});
+
+	it("throws when neither upgrades nor upgrade is provided", () => {
+		const { upgrades: _, upgrade: __, ...rest } = params;
+		expect(() => normalizeUpgrades(rest as UpgradeParams)).toThrow(
+			NonRetryableError,
+		);
 	});
 });
 
