@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { safeUpgradeBranch } from "../src/workflows/branches.ts";
+import {
+	safeUpgradeBranch,
+	safeUpgradeGroupBranch,
+} from "../src/workflows/branches.ts";
 import {
 	DEFERRED_MANAGERS,
 	MANAGER_WORKFLOW_BINDINGS,
@@ -29,6 +32,49 @@ describe("safeUpgradeBranch", () => {
 				updateType: "minor",
 			}),
 		).toBe("uppy/mise-github-endevco-aube-1.18.0");
+	});
+});
+
+describe("safeUpgradeGroupBranch", () => {
+	it("builds a deterministic branch from manager, group name and package set", () => {
+		const first = safeUpgradeGroupBranch("npm", "Astro", [
+			{
+				manager: "npm",
+				manifest: "package.json",
+				package: "astro",
+				current: "1.0.0",
+				target: "1.1.0",
+				updateType: "minor",
+			},
+			{
+				manager: "npm",
+				manifest: "package.json",
+				package: "@astrojs/rss",
+				current: "1.0.0",
+				target: "1.1.0",
+				updateType: "minor",
+			},
+		]);
+		const second = safeUpgradeGroupBranch("npm", "Astro", [
+			{
+				manager: "npm",
+				manifest: "package.json",
+				package: "@astrojs/rss",
+				current: "1.0.0",
+				target: "1.1.0",
+				updateType: "minor",
+			},
+			{
+				manager: "npm",
+				manifest: "package.json",
+				package: "astro",
+				current: "1.0.0",
+				target: "1.1.0",
+				updateType: "minor",
+			},
+		]);
+		expect(first).toBe(second);
+		expect(first).toMatch(/^uppy\/npm-group-Astro-[a-f0-9]{7}$/);
 	});
 });
 

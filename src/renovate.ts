@@ -277,7 +277,11 @@ export function parseDurationMs(text: string): number | null {
 	if (!match) {
 		return null;
 	}
-	const unit = DURATION_UNIT_MS[match[2].toLowerCase()];
+	const unitName = match[2];
+	if (unitName === undefined) {
+		return null;
+	}
+	const unit = DURATION_UNIT_MS[unitName.toLowerCase()];
 	return unit === undefined ? null : Number(match[1]) * unit;
 }
 
@@ -299,6 +303,162 @@ const ruleAppliesToDepType = (
 	}
 	return Array.isArray(depTypes) && depTypes.includes(depType);
 };
+
+/**
+ * Convert a Renovate glob pattern (e.g. `@astrojs/*`) into an anchored RegExp.
+ * Only `*` (any sequence) and `?` (any single char) wildcards are supported;
+ * other regex metacharacters are escaped.
+ */
+function globToRegex(pattern: string): RegExp | null {
+	try {
+		const escaped = pattern
+			.replace(/[.+^${}()|[\]\\]/g, "\\$&")
+			.replace(/\*/g, ".*")
+			.replace(/\?/g, ".");
+		return new RegExp(`^${escaped}$`);
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * Test whether a package name matches a single `matchPackageNames` entry.
+ * Supports exact names, glob patterns, and regexes delimited by `/.../`.
+ */
+function packageNameMatchesPattern(name: string, pattern: string): boolean {
+	try {
+		if (pattern.startsWith("/") && pattern.endsWith("/")) {
+			return new RegExp(pattern.slice(1, -1)).test(name);
+		}
+		const regex = globToRegex(pattern);
+		return regex ? regex.test(name) : false;
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * Test whether a dependency name matches the `matchPackageNames` criterion of a
+ * package rule. Negated entries (`!pattern`) exclude the dependency; positive
+ * entries require at least one match. When the list contains only negations the
+ * default is to match everything except excluded names.
+ */
+function matchPackageNames(
+	name: string,
+	matchers: RenovateConfigValue,
+): boolean {
+	if (!Array.isArray(matchers)) {
+		return true;
+	}
+	const positives: string[] = [];
+	const negatives: string[] = [];
+	for (const matcher of matchers) {
+		if (typeof matcher !== "string") {
+			continue;
+		}
+		if (matcher.startsWith("!")) {
+			negatives.push(matcher.slice(1));
+		} else {
+			positives.push(matcher);
+		}
+	}
+	if (negatives.some((pattern) => packageNameMatchesPattern(name, pattern))) {
+		return false;
+	}
+	if (positives.length === 0) {
+		return true;
+	}
+	return positives.some((pattern) => packageNameMatchesPattern(name, pattern));
+}
+
+/**
+ * Test whether a dependency name matches the `matchPackagePatterns` criterion of
+ * a package rule. Each pattern is a regex (optionally delimited by `/.../`);
+ * at least one pattern must match.
+ */
+function matchPackagePatterns(
+	name: string,
+	patterns: RenovateConfigValue,
+): boolean {
+	if (!Array.isArray(patterns)) {
+		return true;
+	}
+	return patterns.some((pattern) => {
+		if (typeof pattern !== "string") {
+			return false;
+		}
+		const source =
+			pattern.startsWith("/") && pattern.endsWith("/")
+				? pattern.slice(1, -1)
+				: pattern;
+		try {
+			return new RegExp(source).test(name);
+		} catch {
+			return false;
+		}
+	});
+}
+
+/**
+ * Test whether a string value matches an exact-string-list criterion such as
+ * `matchDepTypes` or `matchUpdateTypes`.
+ */
+function matchStringCriterion(
+	value: string | undefined,
+	matchers: RenovateConfigValue,
+): boolean {
+	if (!Array.isArray(matchers)) {
+		return true;
+	}
+	if (value === undefined) {
+		return false;
+	}
+	return matchers.includes(value);
+}
+
+/**
+ * Determine whether a Renovate `packageRule` applies to a dependency. Criteria
+ * are combined with AND logic; array criteria match when any element matches
+ * (OR within the array). Negations inside `matchPackageNames` are honoured.
+ */
+export function packageRuleMatches(
+	rule: RenovateConfig,
+	dep: { name: string; depType?: string; updateType?: string },
+): boolean {
+	return (
+		matchPackageNames(dep.name, rule.matchPackageNames) &&
+		matchPackagePatterns(dep.name, rule.matchPackagePatterns) &&
+		matchStringCriterion(dep.depType, rule.matchDepTypes) &&
+		matchStringCriterion(dep.updateType, rule.matchUpdateTypes)
+	);
+}
+
+/**
+ * Resolve the `groupName` Renovate would assign to a dependency from the config's
+ * `packageRules`. Rules are evaluated in order and the last matching rule wins,
+ * mirroring Renovate. Returns `undefined` when no rule assigns a group.
+ *
+ * @see https://docs.renovatebot.com/configuration-options/#groupname
+ */
+export function resolveGroupName(
+	config: RenovateConfig,
+	dep: { name: string; depType?: string; updateType?: string },
+): string | undefined {
+	const rules = config.packageRules;
+	if (!Array.isArray(rules)) {
+		return undefined;
+	}
+	let groupName: string | undefined;
+	for (const rule of rules) {
+		if (!isRecord(rule)) {
+			continue;
+		}
+		if (packageRuleMatches(rule, dep) && typeof rule.groupName === "string") {
+			groupName = rule.groupName;
+		}
+	}
+	return groupName;
+}
 
 /**
  * Resolve the `rangeStrategy` Renovate would apply to a dependency of the given

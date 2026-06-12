@@ -4,7 +4,7 @@ import type { SafeUpgrade } from "../deps.ts";
 import { NonRetryableError } from "cloudflare:workflows";
 import { CommandExitError, Sandbox as E2bSandbox } from "e2b";
 import { type GithubApp, getApp } from "../github.ts";
-import { safeUpgradeBranch } from "./branches.ts";
+import { safeUpgradeBranch, safeUpgradeGroupBranch } from "./branches.ts";
 
 /**
  * The published e2b template every Manager workflow boots from. Single source of
@@ -68,7 +68,10 @@ export interface UpgradeParams {
 	repository: string;
 	defaultBranch: string;
 	installationId: number;
-	upgrade: SafeUpgrade;
+	/** @deprecated Use `upgrades` instead. Single-upgrade legacy path. */
+	upgrade?: SafeUpgrade;
+	/** Grouped upgrades (one or more). */
+	upgrades: SafeUpgrade[];
 }
 
 /**
@@ -109,8 +112,26 @@ export interface ManagerUpgradeSpec {
 	 * manifest leave it unset.
 	 */
 	editManifest?: (content: string, upgrade: SafeUpgrade) => string;
+	/**
+	 * Optional grouped variant of {@link editManifest}. Receives the manifest
+	 * content and the subset of upgrades that target the current manifest. When
+	 * absent, grouped upgrades fall back to applying {@link editManifest} for each
+	 * upgrade sequentially.
+	 */
+	editManifestGrouped?: (content: string, upgrades: SafeUpgrade[]) => string;
 	updateCommand: (upgrade: SafeUpgrade) => string;
 	commitMessage: (upgrade: SafeUpgrade) => string;
+	/**
+	 * Optional grouped variant of {@link updateCommand}. When present and more
+	 * than one upgrade is dispatched together, this runs instead of the single
+	 * command. The command must update every package in the group atomically.
+	 */
+	updateCommandGrouped?: (upgrades: SafeUpgrade[]) => string;
+	/**
+	 * Optional grouped variant of {@link commitMessage}. When absent, the first
+	 * upgrade's package is used as the commit subject.
+	 */
+	commitMessageGrouped?: (upgrades: SafeUpgrade[]) => string;
 }
 
 /**
@@ -163,25 +184,28 @@ export async function mintInstallationToken(
 }
 
 /**
- * Render the PR body: a structured metadata header (Package, From, To, Manifest,
- * Bump type), an optional link back to the Dependency Dashboard issue, and the
- * inline diff. The single source of the PR-body Markdown shape.
+ * Render the PR body: a structured metadata header listing each upgrade, an
+ * optional link back to the Dependency Dashboard issue, and the inline diff.
+ * The single source of the PR-body Markdown shape.
  */
 export function renderPrBody(
-	upgrade: SafeUpgrade,
+	upgrades: SafeUpgrade[],
 	result: SandboxResult,
 	dashboardIssueUrl?: string,
 ): string {
+	if (upgrades.length === 0) {
+		throw new Error("renderPrBody requires at least one upgrade");
+	}
 	const lines = [
-		"| | |",
-		"| --- | --- |",
-		`| Package | \`${upgrade.package}\` |`,
-		`| From | \`${upgrade.current}\` |`,
-		`| To | \`${upgrade.target}\` |`,
-		`| Manifest | \`${upgrade.manifest}\` |`,
-		`| Bump type | ${upgrade.updateType} |`,
-		"",
+		"| Package | From | To | Manifest | Bump type |",
+		"| --- | --- | --- | --- | --- |",
 	];
+	for (const upgrade of upgrades) {
+		lines.push(
+			`| \`${upgrade.package}\` | \`${upgrade.current}\` | \`${upgrade.target}\` | \`${upgrade.manifest}\` | ${upgrade.updateType} |`,
+		);
+	}
+	lines.push("");
 	if (dashboardIssueUrl) {
 		lines.push(
 			`See the uppy [Dependency Dashboard](${dashboardIssueUrl}) for the broader context.`,
@@ -345,7 +369,7 @@ async function publishBranchFromChanges(
 	octokit: Awaited<ReturnType<GithubApp["getInstallationOctokit"]>>,
 	params: UpgradeParams,
 	result: SandboxUpgradeResult,
-	spec: ManagerUpgradeSpec,
+	commitMessage: string,
 ): Promise<string> {
 	const baseRef = (await octokit.rest.git.getRef({
 		owner: params.organization,
@@ -372,7 +396,7 @@ async function publishBranchFromChanges(
 	const commit = (await octokit.rest.git.createCommit({
 		owner: params.organization,
 		repo: params.repository,
-		message: commitMessageWithSignoff(spec.commitMessage(params.upgrade)),
+		message: commitMessageWithSignoff(commitMessage),
 		tree: tree.data.sha,
 		parents: [baseSha],
 		author: {
@@ -405,6 +429,117 @@ async function publishBranchFromChanges(
 	return commit.data.sha;
 }
 
+export function normalizeUpgrades(params: UpgradeParams): SafeUpgrade[] {
+	if (params.upgrades && params.upgrades.length > 0) {
+		return params.upgrades;
+	}
+	if (params.upgrade) {
+		return [params.upgrade];
+	}
+	throw new NonRetryableError(
+		"UpgradeParams must provide at least one upgrade via `upgrades` or `upgrade`",
+	);
+}
+
+function isGrouped(upgrades: SafeUpgrade[]): boolean {
+	return upgrades.length > 1 || upgrades[0]?.groupName !== undefined;
+}
+
+function resolveBranch(upgrades: SafeUpgrade[]): string {
+	const first = upgrades[0];
+	if (!first) {
+		throw new Error("Cannot resolve branch for empty upgrade list");
+	}
+	if (isGrouped(upgrades)) {
+		return safeUpgradeGroupBranch(
+			first.manager,
+			first.groupName ?? "group",
+			upgrades,
+		);
+	}
+	return safeUpgradeBranch(first);
+}
+
+function resolveCommitMessage(
+	spec: ManagerUpgradeSpec,
+	upgrades: SafeUpgrade[],
+): string {
+	if (isGrouped(upgrades) && spec.commitMessageGrouped) {
+		return spec.commitMessageGrouped(upgrades);
+	}
+	const first = upgrades[0];
+	if (!first) {
+		throw new Error("Cannot resolve commit message for empty upgrade list");
+	}
+	return spec.commitMessage(first);
+}
+
+function resolveUpdateCommand(
+	spec: ManagerUpgradeSpec,
+	upgrades: SafeUpgrade[],
+): string {
+	if (isGrouped(upgrades) && spec.updateCommandGrouped) {
+		return spec.updateCommandGrouped(upgrades);
+	}
+	const first = upgrades[0];
+	if (!first) {
+		throw new Error("Cannot resolve update command for empty upgrade list");
+	}
+	return spec.updateCommand(first);
+}
+
+/**
+ * Apply manifest edits for a group of upgrades. When the Manager supplies a
+ * grouped edit handler it receives all upgrades at once; otherwise each upgrade's
+ * edit is applied sequentially, grouped by manifest so overlapping edits to the
+ * same file compose correctly.
+ */
+async function applyManifestEdits(
+	spec: ManagerUpgradeSpec,
+	upgrades: SafeUpgrade[],
+	sandbox: Sandbox,
+): Promise<void> {
+	if (!spec.editManifest && !spec.editManifestGrouped) {
+		return;
+	}
+	if (isGrouped(upgrades) && spec.editManifestGrouped) {
+		const manifests = new Map<string, SafeUpgrade[]>();
+		for (const upgrade of upgrades) {
+			const list = manifests.get(upgrade.manifest) ?? [];
+			list.push(upgrade);
+			manifests.set(upgrade.manifest, list);
+		}
+		for (const [manifest, groupUpgrades] of manifests) {
+			const manifestPath = `${WORKSPACE}/${manifest}`;
+			const current = await sandbox.files.read(manifestPath);
+			await sandbox.files.write(
+				manifestPath,
+				spec.editManifestGrouped(current, groupUpgrades),
+			);
+			console.log(`Updated ${manifest} in place for group`);
+		}
+		return;
+	}
+	if (!spec.editManifest) {
+		return;
+	}
+	const byManifest = new Map<string, SafeUpgrade[]>();
+	for (const upgrade of upgrades) {
+		const list = byManifest.get(upgrade.manifest) ?? [];
+		list.push(upgrade);
+		byManifest.set(upgrade.manifest, list);
+	}
+	for (const [manifest, groupUpgrades] of byManifest) {
+		const manifestPath = `${WORKSPACE}/${manifest}`;
+		let current = await sandbox.files.read(manifestPath);
+		for (const upgrade of groupUpgrades) {
+			current = spec.editManifest(current, upgrade);
+		}
+		await sandbox.files.write(manifestPath, current);
+		console.log(`Updated ${manifest} in place`);
+	}
+}
+
 /**
  * Run the full closed-PR check → sandbox → PR cycle for one Manager workflow
  * instance. Returns `"no-op"` when a closed PR already exists for the branch;
@@ -418,8 +553,11 @@ export async function runManagerUpgrade(
 	params: UpgradeParams,
 	spec: ManagerUpgradeSpec,
 ): Promise<"no-op" | SandboxResult> {
-	const branch = safeUpgradeBranch(params.upgrade);
+	const upgrades = normalizeUpgrades(params);
+	const branch = resolveBranch(upgrades);
 	const head = `${params.organization}:${branch}`;
+	const commitMessage = resolveCommitMessage(spec, upgrades);
+	const updateCommand = resolveUpdateCommand(spec, upgrades);
 
 	const closedPrExists = await step.do("check-for-closed-pr", async () => {
 		const octokit = await getApp().getInstallationOctokit(
@@ -496,27 +634,19 @@ export async function runManagerUpgrade(
 					cwd: WORKSPACE,
 				});
 				console.log(createBranch);
-				if (spec.editManifest) {
-					const manifestPath = `${WORKSPACE}/${params.upgrade.manifest}`;
-					const current = await sandbox.files.read(manifestPath);
-					await sandbox.files.write(
-						manifestPath,
-						spec.editManifest(current, params.upgrade),
-					);
-					console.log(`Updated ${params.upgrade.manifest} in place`);
-				}
-				const update = await runUpdateCommand(
-					sandbox,
-					spec.updateCommand(params.upgrade),
-				);
+				await applyManifestEdits(spec, upgrades, sandbox);
+				const update = await runUpdateCommand(sandbox, updateCommand);
 				console.log(update);
 				const add = await sandbox.git.add(".", { all: true, cwd: WORKSPACE });
 				console.log(add);
 				const status = await sandbox.git.status(".", { cwd: WORKSPACE });
 				const filesChanged = status.stagedCount;
 				if (filesChanged === 0) {
+					const packages = upgrades
+						.map((u) => `${u.package} -> ${u.target}`)
+						.join(", ");
 					throw new NonRetryableError(
-						`update command produced no changes for ${params.upgrade.package} -> ${params.upgrade.target}`,
+						`update command produced no changes for ${packages}`,
 					);
 				}
 				const changes = await Promise.all(
@@ -553,7 +683,7 @@ export async function runManagerUpgrade(
 			octokit,
 			params,
 			result,
-			spec,
+			commitMessage,
 		);
 	});
 
@@ -573,12 +703,12 @@ export async function runManagerUpgrade(
 		result.filesChanged = files.length || result.filesChanged;
 
 		const body = renderPrBody(
-			params.upgrade,
+			upgrades,
 			result,
 			await dashboardIssueUrl(octokit, params),
 		);
 		// The PR title and commit subject share the structured `chore(deps): …` shape.
-		const title = spec.commitMessage(params.upgrade);
+		const title = commitMessage;
 		if (openPr !== undefined) {
 			await octokit.rest.pulls.update({
 				owner: params.organization,

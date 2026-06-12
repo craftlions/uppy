@@ -63,6 +63,18 @@ export function miseCommitMessage(upgrade: SafeUpgrade): string {
 	return `chore(deps): update ${upgrade.package} from ${upgrade.current} to ${upgrade.target}`;
 }
 
+/** The structured commit subject for a grouped mise upgrade. */
+export function miseCommitMessageGrouped(upgrades: SafeUpgrade[]): string {
+	const names = upgrades.map((upgrade) => upgrade.package).join(", ");
+	const groupName = upgrades[0]?.groupName;
+	const consistent =
+		groupName !== undefined &&
+		upgrades.every((upgrade) => upgrade.groupName === groupName);
+	return consistent
+		? `chore(deps): update ${groupName} (${names})`
+		: `chore(deps): update ${names}`;
+}
+
 /**
  * The mise Manager workflow (see CONTEXT.md, "Manager workflow"): one instance
  * per Safe mise upgrade. Runs the full closed-PR check → sandbox → commit → push
@@ -70,11 +82,12 @@ export function miseCommitMessage(upgrade: SafeUpgrade): string {
  * commit message.
  */
 export class MiseWorkflow extends WorkflowEntrypoint<Env, UpgradeParams> {
-	async run(event: WorkflowEvent<UpgradeParams>, step: WorkflowStep) {
+	override async run(event: WorkflowEvent<UpgradeParams>, step: WorkflowStep) {
 		return runManagerUpgrade(this.env, step, event.payload, {
 			editManifest: miseUpdateManifest,
 			updateCommand: miseInstallCommand,
 			commitMessage: miseCommitMessage,
+			commitMessageGrouped: miseCommitMessageGrouped,
 		});
 	}
 }

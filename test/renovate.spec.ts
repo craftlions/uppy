@@ -11,6 +11,7 @@ import {
 	parseDurationMs,
 	parseRenovateConfig,
 	RENOVATE_CONFIG_PATHS,
+	resolveGroupName,
 	unknownRenovateConfigOptions,
 	vulnerabilityAlertsEnabled,
 } from "../src/renovate.ts";
@@ -391,6 +392,171 @@ describe("vulnerabilityAlertsEnabled", () => {
 			vulnerabilityAlertsEnabled({ vulnerabilityAlerts: { enabled: false } }),
 		).toBe(false);
 		expect(vulnerabilityAlertsEnabled({})).toBe(false);
+	});
+});
+
+describe("resolveGroupName", () => {
+	it("returns undefined when there are no packageRules", () => {
+		expect(resolveGroupName({}, { name: "astro" })).toBeUndefined();
+	});
+
+	it("matches by package name", () => {
+		expect(
+			resolveGroupName(
+				{
+					packageRules: [
+						{ matchPackageNames: ["astro"], groupName: "Astro" },
+					],
+				},
+				{ name: "astro" },
+			),
+		).toBe("Astro");
+	});
+
+	it("matches by pattern", () => {
+		expect(
+			resolveGroupName(
+				{
+					packageRules: [
+						{
+							matchPackagePatterns: ["^@astrojs/"],
+							groupName: "Astro",
+						},
+					],
+				},
+				{ name: "@astrojs/rss" },
+			),
+		).toBe("Astro");
+	});
+
+	it("matches by depType and updateType", () => {
+		expect(
+			resolveGroupName(
+				{
+					packageRules: [
+						{
+							matchDepTypes: ["devDependencies"],
+							matchUpdateTypes: ["minor"],
+							groupName: "Dev minors",
+						},
+					],
+				},
+				{ name: "vitest", depType: "devDependencies", updateType: "minor" },
+			),
+		).toBe("Dev minors");
+	});
+
+	it("returns undefined when the depType does not match", () => {
+		expect(
+			resolveGroupName(
+				{
+					packageRules: [
+						{
+							matchDepTypes: ["devDependencies"],
+							groupName: "Dev",
+						},
+					],
+				},
+				{ name: "react", depType: "dependencies" },
+			),
+		).toBeUndefined();
+	});
+
+	it("lets the last matching rule win", () => {
+		expect(
+			resolveGroupName(
+				{
+					packageRules: [
+						{
+							matchPackageNames: ["@astrojs/rss"],
+							groupName: "First",
+						},
+						{
+							matchPackagePatterns: ["^@astrojs/"],
+							groupName: "Astro",
+						},
+					],
+				},
+				{ name: "@astrojs/rss" },
+			),
+		).toBe("Astro");
+	});
+
+	it("supports negation in matchPackageNames", () => {
+		expect(
+			resolveGroupName(
+				{
+					packageRules: [
+						{
+							matchPackageNames: ["!react", "*"],
+							groupName: "All but React",
+						},
+					],
+				},
+				{ name: "astro" },
+			),
+		).toBe("All but React");
+		expect(
+			resolveGroupName(
+				{
+					packageRules: [
+						{
+							matchPackageNames: ["!react", "*"],
+							groupName: "All but React",
+						},
+					],
+				},
+				{ name: "react" },
+			),
+		).toBeUndefined();
+	});
+
+	it("supports glob patterns in matchPackageNames", () => {
+		expect(
+			resolveGroupName(
+				{
+					packageRules: [
+						{
+							matchPackageNames: ["@astrojs/*"],
+							groupName: "Astro",
+						},
+					],
+				},
+				{ name: "@astrojs/rss" },
+			),
+		).toBe("Astro");
+	});
+
+	it("supports regex-delimited strings in matchPackageNames", () => {
+		expect(
+			resolveGroupName(
+				{
+					packageRules: [
+						{
+							matchPackageNames: ["/^@astrojs//"],
+							groupName: "Astro",
+						},
+					],
+				},
+				{ name: "@astrojs/rss" },
+			),
+		).toBe("Astro");
+	});
+
+	it("treats invalid patterns as non-matching", () => {
+		expect(
+			resolveGroupName(
+				{
+					packageRules: [
+						{
+							matchPackageNames: ["/[invalid/"],
+							groupName: "Astro",
+						},
+					],
+				},
+				{ name: "astro" },
+			),
+		).toBeUndefined();
 	});
 });
 

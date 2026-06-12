@@ -2,6 +2,7 @@ import type { SafeUpgrade } from "../../src/deps.ts";
 import { describe, expect, it } from "vitest";
 import {
 	miseCommitMessage,
+	miseCommitMessageGrouped,
 	miseInstallCommand,
 	miseUpdateManifest,
 } from "../../src/managers/mise.ts";
@@ -115,5 +116,34 @@ describe("miseCommitMessage", () => {
 		expect(miseCommitMessage(upgrade)).toBe(
 			"chore(deps): update npm:@openai/codex from 0.63.0 to 0.64.0",
 		);
+	});
+});
+
+describe("miseCommitMessageGrouped", () => {
+	it("includes the group name and every package", () => {
+		expect(
+			miseCommitMessageGrouped([
+				{ ...upgrade, groupName: "Astro" },
+				{ ...upgrade, package: "npm:@astrojs/rss", groupName: "Astro" },
+			]),
+		).toBe("chore(deps): update Astro (npm:@openai/codex, npm:@astrojs/rss)");
+	});
+
+	it("falls back to a plain package list when groupName is missing", () => {
+		expect(
+			miseCommitMessageGrouped([
+				upgrade,
+				{ ...upgrade, package: "npm:@astrojs/rss" },
+			]),
+		).toBe("chore(deps): update npm:@openai/codex, npm:@astrojs/rss");
+	});
+
+	it("falls back when groupName values are inconsistent", () => {
+		expect(
+			miseCommitMessageGrouped([
+				{ ...upgrade, groupName: "Astro" },
+				{ ...upgrade, package: "npm:@astrojs/rss", groupName: "Other" },
+			]),
+		).toBe("chore(deps): update npm:@openai/codex, npm:@astrojs/rss");
 	});
 });

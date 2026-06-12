@@ -43,6 +43,9 @@ export function parseWorkflowUses(content: string): Dependency[] {
 			continue;
 		}
 		const [, name, ref, comment] = match;
+		if (name === undefined || ref === undefined) {
+			continue;
+		}
 		if (seen.has(name)) {
 			continue;
 		}
@@ -122,7 +125,7 @@ export class GithubActionsWorkflow extends WorkflowEntrypoint<
 	Env,
 	UpgradeParams
 > {
-	async run(_event: WorkflowEvent<UpgradeParams>, _step: WorkflowStep) {
+	override async run(_event: WorkflowEvent<UpgradeParams>, _step: WorkflowStep) {
 		return "no-op";
 	}
 }

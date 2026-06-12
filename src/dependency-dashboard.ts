@@ -34,6 +34,12 @@ export interface DependencyDashboardInput {
 	 * rather than being omitted.
 	 */
 	updatesByManager: Partial<Record<string, UpdateRecord>>;
+	/**
+	 * Resolved Renovate `groupName` per dependency, keyed by Manager name and then
+	 * package name. When present, the npm/mise sections are rendered with group
+	 * sub-headers instead of one flat table.
+	 */
+	groups?: Record<string, Record<string, string>>;
 	/** Scoped pin actions to flag on matching dependency rows. */
 	pins?: PinAction[];
 	/** Open GitHub vulnerability alerts. */
@@ -128,25 +134,79 @@ function renderPlainSection(group: ManagerDependencies): string {
  * deps that Renovate's default policy would bump. Deps without an entry in
  * `updates` are shown as up to date. Rows whose scoped identity is in `pinned`
  * additionally get a `📌 pin` action.
+ *
+ * When `groups` contains entries for this Manager, dependencies are split into
+ * group sub-sections (each with its own table) plus an "Ungrouped" section for
+ * deps that do not belong to any group.
  */
 function renderUpdatableSection(
 	group: ManagerDependencies,
 	updates: Readonly<UpdateRecord>,
 	pinned: ReadonlySet<string>,
+	groups?: Readonly<Record<string, string>>,
 ): string {
-	const rows = group.files
-		.flatMap((file) =>
-			file.dependencies.map((dep) => {
-				const { target, update } = updateCells(
-					updates[dep.name],
-					pinned.has(pinKey(group.manager, file.file, dep.name)),
-					dep.unsupportedReason,
-				);
-				return `| \`${dep.name}\` | \`${dep.version}\` | ${target} | ${update} | \`${file.file}\` |`;
-			}),
-		)
-		.join("\n");
-	return `### ${group.manager} (${countDependencies(group)})\n\n| Package | Current | Target | Update | Manifest |\n| --- | --- | --- | --- | --- |\n${rows}`;
+	const header = `### ${group.manager} (${countDependencies(group)})`;
+
+	if (!groups || Object.keys(groups).length === 0) {
+		const rows = group.files
+			.flatMap((file) =>
+				file.dependencies.map((dep) =>
+					renderUpdatableRow(group.manager, file.file, dep, updates, pinned),
+				),
+			)
+			.join("\n");
+		return `${header}\n\n| Package | Current | Target | Update | Manifest |\n| --- | --- | --- | --- | --- |\n${rows}`;
+	}
+
+	const grouped = new Map<string, string[]>();
+	const ungrouped: string[] = [];
+	for (const file of group.files) {
+		for (const dep of file.dependencies) {
+			const row = renderUpdatableRow(
+				group.manager,
+				file.file,
+				dep,
+				updates,
+				pinned,
+			);
+			const groupName = groups[dep.name];
+			if (groupName) {
+				const list = grouped.get(groupName) ?? [];
+				list.push(row);
+				grouped.set(groupName, list);
+			} else {
+				ungrouped.push(row);
+			}
+		}
+	}
+
+	const parts = [header];
+	for (const [groupName, rows] of grouped) {
+		parts.push(
+			`#### ${groupName}\n\n| Package | Current | Target | Update | Manifest |\n| --- | --- | --- | --- | --- |\n${rows.join("\n")}`,
+		);
+	}
+	if (ungrouped.length > 0) {
+		parts.push(
+			`#### Ungrouped\n\n| Package | Current | Target | Update | Manifest |\n| --- | --- | --- | --- | --- |\n${ungrouped.join("\n")}`,
+		);
+	}
+	return parts.join("\n\n");
+}
+
+function renderUpdatableRow(
+	manager: string,
+	manifest: string,
+	dep: Dependency,
+	updates: Readonly<UpdateRecord>,
+	pinned: ReadonlySet<string>,
+): string {
+	const { target, update } = updateCells(
+		updates[dep.name],
+		pinned.has(pinKey(manager, manifest, dep.name)),
+		dep.unsupportedReason,
+	);
+	return `| \`${dep.name}\` | \`${dep.version}\` | ${target} | ${update} | \`${manifest}\` |`;
 }
 
 /**
@@ -246,6 +306,7 @@ function renderDetectedDependencies(
 	managerDependencies: ManagerDependencies[],
 	updatesByManager: Partial<Record<string, UpdateRecord>>,
 	pinned: ReadonlySet<string>,
+	groups?: Readonly<Record<string, Record<string, string>>>,
 ): string {
 	if (managerDependencies.length === 0) {
 		return "";
@@ -257,7 +318,12 @@ function renderDetectedDependencies(
 			return renderGithubActionsSection(group, updates ?? {});
 		}
 		return updates && UPDATABLE_MANAGERS.has(group.manager)
-			? renderUpdatableSection(group, updates, pinned)
+			? renderUpdatableSection(
+					group,
+					updates,
+					pinned,
+					groups?.[group.manager],
+				)
 			: renderPlainSection(group);
 	});
 
@@ -364,6 +430,7 @@ export function renderDependencyDashboard(
 		minimumReleaseAge,
 		managerDependencies,
 		updatesByManager,
+		groups,
 		pins = [],
 		vulnerabilityAlerts,
 		osvAlerts,
@@ -379,7 +446,12 @@ export function renderDependencyDashboard(
 		renderOsvVulnerabilityAlerts(osvAlerts),
 		renderUnsupportedDependencies(managerDependencies),
 		"This issue lists Uppy updates and detected dependencies.",
-		renderDetectedDependencies(managerDependencies, updatesByManager, pinned),
+		renderDetectedDependencies(
+			managerDependencies,
+			updatesByManager,
+			pinned,
+			groups,
+		),
 		`Last updated at ${updatedAt.toISOString()}`,
 	];
 

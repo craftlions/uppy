@@ -28,6 +28,7 @@ import {
 	detectRenovateConfig,
 	npmMinimumReleaseAgeMs,
 	osvVulnerabilityAlertsEnabled,
+	resolveGroupName,
 	vulnerabilityAlertsEnabled,
 } from "../renovate.ts";
 import { fetchUpdateCheckForManager } from "../update-check.ts";
@@ -46,7 +47,7 @@ import {
 type Params = { organization: string; repository: string };
 
 export class UppyWorkflow extends WorkflowEntrypoint<Env, Params> {
-	async run(event: WorkflowEvent<Params>, step: WorkflowStep) {
+	override async run(event: WorkflowEvent<Params>, step: WorkflowStep) {
 		const { organization, repository } = event.payload;
 
 		const detectedConfig = await step.do("detect-renovate-config", async () => {
@@ -154,8 +155,42 @@ export class UppyWorkflow extends WorkflowEntrypoint<Env, Params> {
 			Object.fromEntries(updateEntries);
 
 		const safeUpgrades = await step.do("list-safe-upgrades", async () => {
-			return listSafeUpgrades(managerDependencies, updatesByManager);
+			return listSafeUpgrades(
+				managerDependencies,
+				updatesByManager,
+				config ? (dep) => resolveGroupName(config, dep) : undefined,
+			);
 		});
+
+		const groups: Record<string, Record<string, string>> = {};
+		if (config) {
+			for (const group of managerDependencies) {
+				if (!["npm", "mise"].includes(group.manager)) continue;
+				const managerUpdates = updatesByManager[group.manager] ?? {};
+				for (const file of group.files) {
+					for (const dep of file.dependencies) {
+						const status = managerUpdates[dep.name];
+						const depForRule: {
+							name: string;
+							depType?: string;
+							updateType?: string;
+						} = { name: dep.name };
+						if (dep.depType !== undefined) {
+							depForRule.depType = dep.depType;
+						}
+						if (status?.updateType !== undefined) {
+							depForRule.updateType = status.updateType;
+						}
+						const groupName = resolveGroupName(config, depForRule);
+						if (groupName) {
+							const managerGroups = groups[group.manager] ?? {};
+							managerGroups[dep.name] = groupName;
+							groups[group.manager] = managerGroups;
+						}
+					}
+				}
+			}
+		}
 
 		// Validate every Manager (deferred ones included) maps to a binding, so a
 		// typo or a new Manager surfaces here rather than being silently dropped.
@@ -185,23 +220,45 @@ export class UppyWorkflow extends WorkflowEntrypoint<Env, Params> {
 						installationId,
 					};
 
-					// Group by binding so each Manager workflow gets one createBatch.
-					const byBinding = new Map<keyof Env, SafeUpgrade[]>();
+					// Group by (manager, groupName) so each Renovate group becomes one
+					// workflow instance / PR. Ungrouped upgrades keep their own instance.
+					const grouped = new Map<string, SafeUpgrade[]>();
 					for (const upgrade of dispatchable) {
-						const binding = managerWorkflowBinding(upgrade.manager);
-						const group = byBinding.get(binding) ?? [];
+						const key = upgrade.groupName
+							? `${upgrade.manager}::group::${upgrade.groupName}`
+							: `${upgrade.manager}::${upgrade.package}`;
+						const group = grouped.get(key) ?? [];
 						group.push(upgrade);
-						byBinding.set(binding, group);
+						grouped.set(key, group);
+					}
+
+					// Group by binding so each Manager workflow gets one createBatch.
+					const byBinding = new Map<keyof Env, SafeUpgrade[][]>();
+					for (const upgrades of grouped.values()) {
+						const first = upgrades[0];
+						if (!first) continue;
+						const binding = managerWorkflowBinding(first.manager);
+						const list = byBinding.get(binding) ?? [];
+						list.push(upgrades);
+						byBinding.set(binding, list);
 					}
 
 					let dispatched = 0;
-					for (const [binding, upgrades] of byBinding) {
+					for (const [binding, upgradeGroups] of byBinding) {
 						const workflow = this.env[binding] as Workflow<UpgradeParams>;
 						const instances = await workflow.createBatch(
-							upgrades.map((upgrade) => ({
-								id: `${event.instanceId}-${upgrade.manager}-${nanoid()}`,
-								params: { ...runContext, upgrade },
-							})),
+							upgradeGroups.map((upgrades) => {
+								const first = upgrades[0];
+								if (!first) {
+									throw new Error("Empty upgrade group cannot be dispatched");
+								}
+								return {
+									id: `${event.instanceId}-${first.manager}-${
+										first.groupName ?? first.package
+									}-${nanoid()}`,
+									params: { ...runContext, upgrades },
+								};
+							}),
 						);
 						dispatched += instances.length;
 					}
@@ -236,6 +293,7 @@ export class UppyWorkflow extends WorkflowEntrypoint<Env, Params> {
 						minimumReleaseAge,
 						managerDependencies,
 						updatesByManager,
+						groups,
 						pins,
 						vulnerabilityAlerts,
 						osvAlerts,

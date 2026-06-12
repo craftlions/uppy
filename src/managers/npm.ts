@@ -47,16 +47,47 @@ export function npmCommitMessage(upgrade: SafeUpgrade): string {
 }
 
 /**
+ * The shell command that updates a group of npm dependencies. Runs `aube add`
+ * for each package in sequence through a hermetic `mise exec`. Appends `-D`
+ * when a dependency lives in `devDependencies`.
+ */
+export function npmUpdateCommandGrouped(upgrades: SafeUpgrade[]): string {
+	if (!upgrades || upgrades.length === 0) {
+		throw new Error("npmUpdateCommandGrouped requires at least one upgrade");
+	}
+	return upgrades
+		.map((upgrade) => {
+			const base = `mise --no-config --no-env --no-hooks exec aube@latest node@latest -- aube add ${upgrade.package}@${upgrade.target}`;
+			return upgrade.depType === "devDependencies" ? `${base} -D` : base;
+		})
+		.join(" && ");
+}
+
+/** The structured commit subject for a grouped npm upgrade. */
+export function npmCommitMessageGrouped(upgrades: SafeUpgrade[]): string {
+	const names = upgrades.map((upgrade) => upgrade.package).join(", ");
+	const groupName = upgrades[0]?.groupName;
+	const consistent =
+		groupName !== undefined &&
+		upgrades.every((upgrade) => upgrade.groupName === groupName);
+	return consistent
+		? `chore(deps): update ${groupName} (${names})`
+		: `chore(deps): update ${names}`;
+}
+
+/**
  * The npm Manager workflow (see CONTEXT.md, "Manager workflow"): one instance per
  * Safe npm upgrade. Runs the full closed-PR check → sandbox → commit → push → PR
  * cycle via {@link runManagerUpgrade}, with the npm update command and commit
  * message.
  */
 export class NpmWorkflow extends WorkflowEntrypoint<Env, UpgradeParams> {
-	async run(event: WorkflowEvent<UpgradeParams>, step: WorkflowStep) {
+	override async run(event: WorkflowEvent<UpgradeParams>, step: WorkflowStep) {
 		return runManagerUpgrade(this.env, step, event.payload, {
 			updateCommand: npmUpdateCommand,
 			commitMessage: npmCommitMessage,
+			updateCommandGrouped: npmUpdateCommandGrouped,
+			commitMessageGrouped: npmCommitMessageGrouped,
 		});
 	}
 }
