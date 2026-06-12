@@ -3,7 +3,7 @@ import handler from "@astrojs/cloudflare/entrypoints/server";
 import { createWebMiddleware } from "@octokit/webhooks";
 import { configResponse } from "./api.ts";
 import { getApp, repositoryAccessFor } from "./github.ts";
-import { nanoid } from "./ids.ts";
+import { workflowInstanceId } from "./ids.ts";
 
 const app = getApp();
 
@@ -85,7 +85,7 @@ export default {
 				`Creating uppy run for ${body.organization}/${body.repository}`,
 			);
 			await env.UPPY_WORKFLOW.create({
-				id: `${body.organization}-${body.repository}-${nanoid()}`,
+				id: workflowInstanceId(body.organization, body.repository),
 				params: {
 					organization: body.organization,
 					repository: body.repository,

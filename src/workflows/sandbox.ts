@@ -68,6 +68,8 @@ export interface UpgradeParams {
 	repository: string;
 	defaultBranch: string;
 	installationId: number;
+	/** The Cloudflare Workflow instance ID for this Manager workflow run. */
+	instanceId: string;
 	/** @deprecated Use `upgrades` instead. Single-upgrade legacy path. */
 	upgrade?: SafeUpgrade;
 	/** Grouped upgrades (one or more). */
@@ -192,6 +194,7 @@ export function renderPrBody(
 	upgrades: SafeUpgrade[],
 	result: SandboxResult,
 	dashboardIssueUrl?: string,
+	instanceId?: string,
 ): string {
 	if (upgrades.length === 0) {
 		throw new Error("renderPrBody requires at least one upgrade");
@@ -211,6 +214,9 @@ export function renderPrBody(
 			`See the uppy [Dependency Dashboard](${dashboardIssueUrl}) for the broader context.`,
 			"",
 		);
+	}
+	if (instanceId) {
+		lines.push(`Workflow instance: \`${instanceId}\``, "");
 	}
 	lines.push("```diff", result.diff.trimEnd(), "```", "");
 	return lines.join("\n");
@@ -706,6 +712,7 @@ export async function runManagerUpgrade(
 			upgrades,
 			result,
 			await dashboardIssueUrl(octokit, params),
+			params.instanceId,
 		);
 		// The PR title and commit subject share the structured `chore(deps): …` shape.
 		const title = commitMessage;

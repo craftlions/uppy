@@ -92,3 +92,11 @@ exits with the result. The orchestrator does not know what a Manager workflow
 does internally — it only knows which binding to call.
 _Avoid_: per-update workflow (one instance per safe upgrade is a *single*
 Manager workflow instance, not a separate class), update worker
+
+**Instance ID**:
+The Cloudflare Workflow instance identifier. The main orchestrator run uses
+`<org>-<repo>-<nanoid>`. Each Manager workflow instance uses
+`<main-instance-id>-<manager>-<nanoid>` — the manager name only, never the
+package or group name. The ID is included in every PR description as
+operational metadata for debugging Cloudflare Workflow runs.
+_Avoid_: workflow id (ambiguous with the binding name)

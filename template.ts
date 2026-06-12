@@ -9,4 +9,5 @@ await Template.build(template, "uppy-base", {
 	cpuCount: 4,
 	memoryMB: 8192,
 	onBuildLogs: defaultBuildLogger(),
+	skipCache: true,
 });

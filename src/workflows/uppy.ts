@@ -10,7 +10,7 @@ import {
 	type UpdateRecord,
 } from "../deps.ts";
 import { repositoryAccessFor } from "../github.ts";
-import { nanoid } from "../ids.ts";
+import { workflowInstanceId } from "../ids.ts";
 import {
 	datasourceFor,
 	detectDependencies,
@@ -192,81 +192,6 @@ export class UppyWorkflow extends WorkflowEntrypoint<Env, Params> {
 			}
 		}
 
-		// Validate every Manager (deferred ones included) maps to a binding, so a
-		// typo or a new Manager surfaces here rather than being silently dropped.
-		for (const upgrade of safeUpgrades) {
-			managerWorkflowBinding(upgrade.manager);
-		}
-		const dispatchable = safeUpgrades.filter(
-			(upgrade) => !DEFERRED_MANAGERS.has(upgrade.manager),
-		);
-
-		let safeUpgradesDispatched = 0;
-		if (dispatchable.length > 0) {
-			safeUpgradesDispatched = await step.do(
-				"dispatch-safe-upgrade-workflows",
-				async () => {
-					const { defaultBranch, installationId } = await repositoryAccessFor(
-						organization,
-						repository,
-					);
-					console.log(
-						`Dispatching Manager workflows for ${organization}/${repository} using installation ${installationId}`,
-					);
-					const runContext = {
-						organization,
-						repository,
-						defaultBranch,
-						installationId,
-					};
-
-					// Group by (manager, groupName) so each Renovate group becomes one
-					// workflow instance / PR. Ungrouped upgrades keep their own instance.
-					const grouped = new Map<string, SafeUpgrade[]>();
-					for (const upgrade of dispatchable) {
-						const key = upgrade.groupName
-							? `${upgrade.manager}::group::${upgrade.groupName}`
-							: `${upgrade.manager}::${upgrade.package}`;
-						const group = grouped.get(key) ?? [];
-						group.push(upgrade);
-						grouped.set(key, group);
-					}
-
-					// Group by binding so each Manager workflow gets one createBatch.
-					const byBinding = new Map<keyof Env, SafeUpgrade[][]>();
-					for (const upgrades of grouped.values()) {
-						const first = upgrades[0];
-						if (!first) continue;
-						const binding = managerWorkflowBinding(first.manager);
-						const list = byBinding.get(binding) ?? [];
-						list.push(upgrades);
-						byBinding.set(binding, list);
-					}
-
-					let dispatched = 0;
-					for (const [binding, upgradeGroups] of byBinding) {
-						const workflow = this.env[binding] as Workflow<UpgradeParams>;
-						const instances = await workflow.createBatch(
-							upgradeGroups.map((upgrades) => {
-								const first = upgrades[0];
-								if (!first) {
-									throw new Error("Empty upgrade group cannot be dispatched");
-								}
-								return {
-									id: `${event.instanceId}-${first.manager}-${
-										first.groupName ?? first.package
-									}-${nanoid()}`,
-									params: { ...runContext, upgrades },
-								};
-							}),
-						);
-						dispatched += instances.length;
-					}
-					return dispatched;
-				},
-			);
-		}
-
 		if (config && dependencyDashboardEnabled(config)) {
 			const pins: PinAction[] = managerDependencies.flatMap((group) =>
 				group.files.flatMap((file) =>
@@ -323,6 +248,82 @@ export class UppyWorkflow extends WorkflowEntrypoint<Env, Params> {
 					});
 				}
 			});
+		}
+
+		// Validate every Manager (deferred ones included) maps to a binding, so a
+		// typo or a new Manager surfaces here rather than being silently dropped.
+		for (const upgrade of safeUpgrades) {
+			managerWorkflowBinding(upgrade.manager);
+		}
+		const dispatchable = safeUpgrades.filter(
+			(upgrade) => !DEFERRED_MANAGERS.has(upgrade.manager),
+		);
+
+		// Dispatched last, after the dashboard is synced, so the dashboard reflects
+		// this run even if a Manager workflow dispatch fails.
+		let safeUpgradesDispatched = 0;
+		if (dispatchable.length > 0) {
+			safeUpgradesDispatched = await step.do(
+				"dispatch-safe-upgrade-workflows",
+				async () => {
+					const { defaultBranch, installationId } = await repositoryAccessFor(
+						organization,
+						repository,
+					);
+					console.log(
+						`Dispatching Manager workflows for ${organization}/${repository} using installation ${installationId}`,
+					);
+					const runContext = {
+						organization,
+						repository,
+						defaultBranch,
+						installationId,
+					};
+
+					// Group by (manager, groupName) so each Renovate group becomes one
+					// workflow instance / PR. Ungrouped upgrades keep their own instance.
+					const grouped = new Map<string, SafeUpgrade[]>();
+					for (const upgrade of dispatchable) {
+						const key = upgrade.groupName
+							? `${upgrade.manager}::group::${upgrade.groupName}`
+							: `${upgrade.manager}::${upgrade.package}`;
+						const group = grouped.get(key) ?? [];
+						group.push(upgrade);
+						grouped.set(key, group);
+					}
+
+					// Group by binding so each Manager workflow gets one createBatch.
+					const byBinding = new Map<keyof Env, SafeUpgrade[][]>();
+					for (const upgrades of grouped.values()) {
+						const first = upgrades[0];
+						if (!first) continue;
+						const binding = managerWorkflowBinding(first.manager);
+						const list = byBinding.get(binding) ?? [];
+						list.push(upgrades);
+						byBinding.set(binding, list);
+					}
+
+					let dispatched = 0;
+					for (const [binding, upgradeGroups] of byBinding) {
+						const workflow = this.env[binding] as Workflow<UpgradeParams>;
+						const instances = await workflow.createBatch(
+							upgradeGroups.map((upgrades) => {
+								const first = upgrades[0];
+								if (!first) {
+									throw new Error("Empty upgrade group cannot be dispatched");
+								}
+								const id = workflowInstanceId(event.instanceId, first.manager);
+								return {
+									id,
+									params: { ...runContext, upgrades, instanceId: id },
+								};
+							}),
+						);
+						dispatched += instances.length;
+					}
+					return dispatched;
+				},
+			);
 		}
 
 		return {

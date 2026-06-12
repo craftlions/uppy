@@ -64,6 +64,7 @@ vi.mock("../../src/github.ts", () => ({
 
 import { Sandbox } from "e2b";
 import { getApp } from "../../src/github.ts";
+import { safeUpgradeGroupBranch } from "../../src/workflows/branches.ts";
 import {
 	BOT_EMAIL,
 	BOT_NAME,
@@ -78,7 +79,6 @@ import {
 	WORKSPACE,
 	withSandbox,
 } from "../../src/workflows/sandbox.ts";
-import { safeUpgradeGroupBranch } from "../../src/workflows/branches.ts";
 
 type Cmd = { exitCode: number; stdout: string; stderr: string };
 const OK: Cmd = { exitCode: 0, stdout: "", stderr: "" };
@@ -259,6 +259,7 @@ const params: UpgradeParams = {
 	repository: "website",
 	defaultBranch: "main",
 	installationId: 42,
+	instanceId: "craftlions-website-abc123-mise",
 	upgrades: [upgrade],
 };
 const groupedParams: UpgradeParams = {
@@ -266,6 +267,7 @@ const groupedParams: UpgradeParams = {
 	repository: "website",
 	defaultBranch: "main",
 	installationId: 42,
+	instanceId: "craftlions-website-def456-mise",
 	upgrades: [astroAlpha, astroBeta],
 };
 const spec = {
@@ -306,9 +308,7 @@ describe("renderPrBody", () => {
 
 	it("renders the structured table, diff, and dashboard link", () => {
 		const body = renderPrBody([upgrade], result, "https://gh/issues/1");
-		expect(body).toContain(
-			"| Package | From | To | Manifest | Bump type |",
-		);
+		expect(body).toContain("| Package | From | To | Manifest | Bump type |");
 		expect(body).toContain("| --- | --- | --- | --- | --- |");
 		expect(body).toContain(
 			"| `npm:@openai/codex` | `0.63.0` | `0.64.0` | `mise.toml` | minor |",
@@ -318,13 +318,16 @@ describe("renderPrBody", () => {
 	});
 
 	it("omits the dashboard link when no issue url is given", () => {
-		expect(renderPrBody([upgrade], result)).not.toContain("Dependency Dashboard");
+		expect(renderPrBody([upgrade], result)).not.toContain(
+			"Dependency Dashboard",
+		);
 	});
 
 	it("renders multiple upgrades in one table", () => {
 		const body = renderPrBody([astroAlpha, astroBeta], result);
-		const headerCount = (body.match(/\| Package \| From \| To \| Manifest \| Bump type \|/g) ?? [])
-			.length;
+		const headerCount = (
+			body.match(/\| Package \| From \| To \| Manifest \| Bump type \|/g) ?? []
+		).length;
 		expect(headerCount).toBe(1);
 		expect(body).toContain(
 			"| `npm:@astrojs/alpha` | `1.0.0` | `1.1.0` | `mise.toml` | minor |",
@@ -332,6 +335,23 @@ describe("renderPrBody", () => {
 		expect(body).toContain(
 			"| `npm:@astrojs/beta` | `2.0.0` | `2.1.0` | `mise.toml` | minor |",
 		);
+	});
+
+	it("includes the workflow instance id as a footer line", () => {
+		const body = renderPrBody(
+			[upgrade],
+			result,
+			undefined,
+			"craftlions-website-abc123-mise",
+		);
+		expect(body).toContain(
+			"Workflow instance: `craftlions-website-abc123-mise`",
+		);
+	});
+
+	it("omits the workflow instance id when not provided", () => {
+		const body = renderPrBody([upgrade], result);
+		expect(body).not.toContain("Workflow instance:");
 	});
 });
 
@@ -613,7 +633,8 @@ describe("runManagerUpgrade", () => {
 			expect.objectContaining({
 				base: "main",
 				head: GROUPED_BRANCH,
-				title: "chore(deps): update Astro (npm:@astrojs/alpha, npm:@astrojs/beta)",
+				title:
+					"chore(deps): update Astro (npm:@astrojs/alpha, npm:@astrojs/beta)",
 			}),
 		);
 	});
