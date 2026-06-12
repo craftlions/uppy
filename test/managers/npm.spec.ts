@@ -53,6 +53,18 @@ describe("npmUpdateCommandGrouped", () => {
 			"mise --no-config --no-env --no-hooks exec aube@latest node@latest -- aube add @octokit/core@7.0.6 && mise --no-config --no-env --no-hooks exec aube@latest node@latest -- aube add vitest@7.0.6 -D",
 		);
 	});
+
+	it("throws when upgrades is empty", () => {
+		expect(() => npmUpdateCommandGrouped([])).toThrow(
+			"npmUpdateCommandGrouped requires at least one upgrade",
+		);
+	});
+
+	it("throws when upgrades is undefined", () => {
+		expect(() => npmUpdateCommandGrouped(undefined as unknown as SafeUpgrade[])).toThrow(
+			"npmUpdateCommandGrouped requires at least one upgrade",
+		);
+	});
 });
 
 describe("npmCommitMessageGrouped", () => {
@@ -69,5 +81,14 @@ describe("npmCommitMessageGrouped", () => {
 		expect(npmCommitMessageGrouped([base, { ...base, package: "vitest" }])).toBe(
 			"chore(deps): update @octokit/core, vitest",
 		);
+	});
+
+	it("falls back when groupName values are inconsistent", () => {
+		expect(
+			npmCommitMessageGrouped([
+				{ ...base, groupName: "MyGroup" },
+				{ ...base, package: "vitest", groupName: "Other" },
+			]),
+		).toBe("chore(deps): update @octokit/core, vitest");
 	});
 });

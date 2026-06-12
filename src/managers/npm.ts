@@ -52,6 +52,9 @@ export function npmCommitMessage(upgrade: SafeUpgrade): string {
  * when a dependency lives in `devDependencies`.
  */
 export function npmUpdateCommandGrouped(upgrades: SafeUpgrade[]): string {
+	if (!upgrades || upgrades.length === 0) {
+		throw new Error("npmUpdateCommandGrouped requires at least one upgrade");
+	}
 	return upgrades
 		.map((upgrade) => {
 			const base = `mise --no-config --no-env --no-hooks exec aube@latest node@latest -- aube add ${upgrade.package}@${upgrade.target}`;
@@ -64,7 +67,10 @@ export function npmUpdateCommandGrouped(upgrades: SafeUpgrade[]): string {
 export function npmCommitMessageGrouped(upgrades: SafeUpgrade[]): string {
 	const names = upgrades.map((upgrade) => upgrade.package).join(", ");
 	const groupName = upgrades[0]?.groupName;
-	return groupName
+	const consistent =
+		groupName !== undefined &&
+		upgrades.every((upgrade) => upgrade.groupName === groupName);
+	return consistent
 		? `chore(deps): update ${groupName} (${names})`
 		: `chore(deps): update ${names}`;
 }

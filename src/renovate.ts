@@ -309,12 +309,16 @@ const ruleAppliesToDepType = (
  * Only `*` (any sequence) and `?` (any single char) wildcards are supported;
  * other regex metacharacters are escaped.
  */
-function globToRegex(pattern: string): RegExp {
-	const escaped = pattern
-		.replace(/[.+^${}()|[\]\\]/g, "\\$&")
-		.replace(/\*/g, ".*")
-		.replace(/\?/g, ".");
-	return new RegExp(`^${escaped}$`);
+function globToRegex(pattern: string): RegExp | null {
+	try {
+		const escaped = pattern
+			.replace(/[.+^${}()|[\]\\]/g, "\\$&")
+			.replace(/\*/g, ".*")
+			.replace(/\?/g, ".");
+		return new RegExp(`^${escaped}$`);
+	} catch {
+		return null;
+	}
 }
 
 /**
@@ -322,10 +326,15 @@ function globToRegex(pattern: string): RegExp {
  * Supports exact names, glob patterns, and regexes delimited by `/.../`.
  */
 function packageNameMatchesPattern(name: string, pattern: string): boolean {
-	if (pattern.startsWith("/") && pattern.endsWith("/")) {
-		return new RegExp(pattern.slice(1, -1)).test(name);
+	try {
+		if (pattern.startsWith("/") && pattern.endsWith("/")) {
+			return new RegExp(pattern.slice(1, -1)).test(name);
+		}
+		const regex = globToRegex(pattern);
+		return regex ? regex.test(name) : false;
+	} catch {
+		return false;
 	}
-	return globToRegex(pattern).test(name);
 }
 
 /**
@@ -382,7 +391,11 @@ function matchPackagePatterns(
 			pattern.startsWith("/") && pattern.endsWith("/")
 				? pattern.slice(1, -1)
 				: pattern;
-		return new RegExp(source).test(name);
+		try {
+			return new RegExp(source).test(name);
+		} catch {
+			return false;
+		}
 	});
 }
 

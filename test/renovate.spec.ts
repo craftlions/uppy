@@ -481,6 +481,83 @@ describe("resolveGroupName", () => {
 			),
 		).toBe("Astro");
 	});
+
+	it("supports negation in matchPackageNames", () => {
+		expect(
+			resolveGroupName(
+				{
+					packageRules: [
+						{
+							matchPackageNames: ["!react", "*"],
+							groupName: "All but React",
+						},
+					],
+				},
+				{ name: "astro" },
+			),
+		).toBe("All but React");
+		expect(
+			resolveGroupName(
+				{
+					packageRules: [
+						{
+							matchPackageNames: ["!react", "*"],
+							groupName: "All but React",
+						},
+					],
+				},
+				{ name: "react" },
+			),
+		).toBeUndefined();
+	});
+
+	it("supports glob patterns in matchPackageNames", () => {
+		expect(
+			resolveGroupName(
+				{
+					packageRules: [
+						{
+							matchPackageNames: ["@astrojs/*"],
+							groupName: "Astro",
+						},
+					],
+				},
+				{ name: "@astrojs/rss" },
+			),
+		).toBe("Astro");
+	});
+
+	it("supports regex-delimited strings in matchPackageNames", () => {
+		expect(
+			resolveGroupName(
+				{
+					packageRules: [
+						{
+							matchPackageNames: ["/^@astrojs//"],
+							groupName: "Astro",
+						},
+					],
+				},
+				{ name: "@astrojs/rss" },
+			),
+		).toBe("Astro");
+	});
+
+	it("treats invalid patterns as non-matching", () => {
+		expect(
+			resolveGroupName(
+				{
+					packageRules: [
+						{
+							matchPackageNames: ["/[invalid/"],
+							groupName: "Astro",
+						},
+					],
+				},
+				{ name: "astro" },
+			),
+		).toBeUndefined();
+	});
 });
 
 describe("detectRenovateConfig", () => {

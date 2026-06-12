@@ -67,7 +67,10 @@ export function miseCommitMessage(upgrade: SafeUpgrade): string {
 export function miseCommitMessageGrouped(upgrades: SafeUpgrade[]): string {
 	const names = upgrades.map((upgrade) => upgrade.package).join(", ");
 	const groupName = upgrades[0]?.groupName;
-	return groupName
+	const consistent =
+		groupName !== undefined &&
+		upgrades.every((upgrade) => upgrade.groupName === groupName);
+	return consistent
 		? `chore(deps): update ${groupName} (${names})`
 		: `chore(deps): update ${names}`;
 }

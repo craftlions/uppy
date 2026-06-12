@@ -128,4 +128,22 @@ describe("miseCommitMessageGrouped", () => {
 			]),
 		).toBe("chore(deps): update Astro (npm:@openai/codex, npm:@astrojs/rss)");
 	});
+
+	it("falls back to a plain package list when groupName is missing", () => {
+		expect(
+			miseCommitMessageGrouped([
+				upgrade,
+				{ ...upgrade, package: "npm:@astrojs/rss" },
+			]),
+		).toBe("chore(deps): update npm:@openai/codex, npm:@astrojs/rss");
+	});
+
+	it("falls back when groupName values are inconsistent", () => {
+		expect(
+			miseCommitMessageGrouped([
+				{ ...upgrade, groupName: "Astro" },
+				{ ...upgrade, package: "npm:@astrojs/rss", groupName: "Other" },
+			]),
+		).toBe("chore(deps): update npm:@openai/codex, npm:@astrojs/rss");
+	});
 });
