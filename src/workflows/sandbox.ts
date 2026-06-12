@@ -475,7 +475,13 @@ export async function runManagerUpgrade(
 					`Preparing sandbox upgrade for ${params.organization}/${params.repository} on ${branch} with token length ${installationToken.length}`,
 				);
 				await sandbox.git.configureUser(BOT_NAME, BOT_EMAIL);
-				await sandbox.git.dangerouslyAuthenticate(gitCredentials);
+				// SECURITY: Never persist the installation token inside the sandbox.
+				// The clone receives inline credentials (x-access-token + token) which
+				// e2b strips from the remote URL after cloning. No credential helper
+				// write is performed so that a malicious dependency's install scripts
+				// — which run next with internet access — cannot read an on-disk token.
+				// Publishing happens via the GitHub API from the worker, so the sandbox
+				// never needs the token again after the clone.
 				const clone = await sandbox.git.clone(cloneUrl, {
 					...gitCredentials,
 					branch: params.defaultBranch,
