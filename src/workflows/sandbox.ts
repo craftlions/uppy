@@ -4,7 +4,7 @@ import type { SafeUpgrade } from "../deps.ts";
 import { NonRetryableError } from "cloudflare:workflows";
 import { CommandExitError, Sandbox as E2bSandbox } from "e2b";
 import { type GithubApp, getApp } from "../github.ts";
-import { safeUpgradeBranch, safeUpgradeGroupBranch } from "./branches.ts";
+import { resolveUpgradeBranch, upgradesAreGrouped } from "./branches.ts";
 
 /**
  * The published e2b template every Manager workflow boots from. Single source of
@@ -499,30 +499,11 @@ export function normalizeUpgrades(params: UpgradeParams): SafeUpgrade[] {
 	);
 }
 
-function isGrouped(upgrades: SafeUpgrade[]): boolean {
-	return upgrades.length > 1 || upgrades[0]?.groupName !== undefined;
-}
-
-function resolveBranch(upgrades: SafeUpgrade[]): string {
-	const first = upgrades[0];
-	if (!first) {
-		throw new Error("Cannot resolve branch for empty upgrade list");
-	}
-	if (isGrouped(upgrades)) {
-		return safeUpgradeGroupBranch(
-			first.manager,
-			first.groupName ?? "group",
-			upgrades,
-		);
-	}
-	return safeUpgradeBranch(first);
-}
-
 function resolveCommitMessage(
 	spec: ManagerUpgradeSpec,
 	upgrades: SafeUpgrade[],
 ): string {
-	if (isGrouped(upgrades) && spec.commitMessageGrouped) {
+	if (upgradesAreGrouped(upgrades) && spec.commitMessageGrouped) {
 		return spec.commitMessageGrouped(upgrades);
 	}
 	const first = upgrades[0];
@@ -536,7 +517,7 @@ function resolveUpdateCommand(
 	spec: ManagerUpgradeSpec,
 	upgrades: SafeUpgrade[],
 ): string {
-	if (isGrouped(upgrades) && spec.updateCommandGrouped) {
+	if (upgradesAreGrouped(upgrades) && spec.updateCommandGrouped) {
 		return spec.updateCommandGrouped(upgrades);
 	}
 	const first = upgrades[0];
@@ -560,7 +541,7 @@ async function applyManifestEdits(
 	if (!spec.editManifest && !spec.editManifestGrouped) {
 		return;
 	}
-	if (isGrouped(upgrades) && spec.editManifestGrouped) {
+	if (upgradesAreGrouped(upgrades) && spec.editManifestGrouped) {
 		const manifests = new Map<string, SafeUpgrade[]>();
 		for (const upgrade of upgrades) {
 			const list = manifests.get(upgrade.manifest) ?? [];
@@ -612,7 +593,7 @@ export async function runManagerUpgrade(
 	spec: ManagerUpgradeSpec,
 ): Promise<"no-op" | SandboxResult> {
 	const upgrades = normalizeUpgrades(params);
-	const branch = resolveBranch(upgrades);
+	const branch = resolveUpgradeBranch(upgrades);
 	const head = `${params.organization}:${branch}`;
 	const commitMessage = resolveCommitMessage(spec, upgrades);
 	const updateCommand = resolveUpdateCommand(spec, upgrades);
