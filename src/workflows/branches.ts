@@ -1,10 +1,10 @@
-import { createHash } from "node:crypto";
 import type { SafeUpgrade } from "../deps.ts";
+import { createHash } from "node:crypto";
 
 const REFNAME_UNSAFE = /[^A-Za-z0-9._-]+/g;
 const EDGE_DOTS = /^\.+|\.+$/g;
 
-function branchSegment(value: string): string {
+export function branchSegment(value: string): string {
 	return (
 		value
 			.replace(REFNAME_UNSAFE, "-")
@@ -18,6 +18,36 @@ export function safeUpgradeBranch(upgrade: SafeUpgrade): string {
 		branchSegment,
 	);
 	return `uppy/${slug.join("-")}`;
+}
+
+/**
+ * Whether a set of upgrades dispatched together forms a grouped PR. A single
+ * upgrade carrying a `groupName` is still grouped — it shares the grouped branch
+ * shape so a later run that adds a sibling package reuses the same group PR.
+ */
+export function upgradesAreGrouped(upgrades: SafeUpgrade[]): boolean {
+	return upgrades.length > 1 || upgrades[0]?.groupName !== undefined;
+}
+
+/**
+ * The branch a set of dispatched-together upgrades publishes to. The single
+ * source of truth shared by the Manager workflow (which creates the branch) and
+ * the orchestrator's PR reconciliation (which must predict it), so the two
+ * cannot drift on branch shape.
+ */
+export function resolveUpgradeBranch(upgrades: SafeUpgrade[]): string {
+	const first = upgrades[0];
+	if (!first) {
+		throw new Error("Cannot resolve branch for empty upgrade list");
+	}
+	if (upgradesAreGrouped(upgrades)) {
+		return safeUpgradeGroupBranch(
+			first.manager,
+			first.groupName ?? "group",
+			upgrades,
+		);
+	}
+	return safeUpgradeBranch(first);
 }
 
 /**
