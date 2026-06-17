@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 const REFNAME_UNSAFE = /[^A-Za-z0-9._-]+/g;
 const EDGE_DOTS = /^\.+|\.+$/g;
 
-function branchSegment(value: string): string {
+export function branchSegment(value: string): string {
 	return (
 		value
 			.replace(REFNAME_UNSAFE, "-")

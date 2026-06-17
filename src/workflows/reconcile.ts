@@ -1,5 +1,5 @@
 import type { SafeUpgrade } from "../deps.ts";
-import { resolveUpgradeBranch } from "./branches.ts";
+import { branchSegment, resolveUpgradeBranch } from "./branches.ts";
 import { MANAGER_WORKFLOW_BINDINGS } from "./dispatch.ts";
 
 /**
@@ -56,23 +56,6 @@ export interface ReconciledGroup {
 
 const KNOWN_MANAGERS = Object.keys(MANAGER_WORKFLOW_BINDINGS);
 
-const REFNAME_UNSAFE = /[^A-Za-z0-9._-]+/g;
-const EDGE_DOTS = /^\.+|\.+$/g;
-
-/**
- * The same sanitizer {@link safeUpgradeGroupBranch} applies to a group name. We
- * re-derive a desired group's slug the same way so it compares equal to the slug
- * parsed back out of an existing PR's branch.
- */
-function branchSegment(value: string): string {
-	return (
-		value
-			.replace(REFNAME_UNSAFE, "-")
-			.replace(EDGE_DOTS, "")
-			.replace(/-+/g, "-") || "dependency"
-	);
-}
-
 /**
  * Group desired upgrades the same way {@link UppyWorkflow}'s dispatch step does —
  * by `(manager, groupName)` for grouped upgrades, by `(manager, package)`
@@ -117,24 +100,31 @@ const GROUP_BRANCH = /^uppy\/(.+?)-group-(.+)-[0-9a-f]{7}$/;
  * an uppy branch name. Mirrors {@link safeUpgradeBranch} /
  * {@link safeUpgradeGroupBranch}: ungrouped branches are
  * `uppy/<manager>-<package>-<target>` and grouped branches are
- * `uppy/<manager>-group-<slug>-<hash>`. Manager is matched against the known set
- * so a hyphenated manager (`github-actions`) is not split at its own hyphen.
+ * `uppy/<manager>-group-<slug>-<hash>`. For ungrouped branches the manager is
+ * matched against the known set (the package and target also contain hyphens, so
+ * the prefix is the only reliable split). Grouped branches encode the manager
+ * unambiguously before `-group-`, so we read it straight from the branch — that
+ * keeps manager matching accurate even for an unknown or since-removed manager.
  */
 export function parseUppyBranch(branch: string): {
 	manager: string | null;
 	grouped: boolean;
 	groupSlug: string | null;
 } {
-	const manager =
-		KNOWN_MANAGERS.find((name) =>
-			branch.startsWith(`${UPPY_BRANCH_PREFIX}${name}-`),
-		) ?? null;
 	const groupMatch = GROUP_BRANCH.exec(branch);
 	if (groupMatch) {
 		// Group 1 (non-greedy, up to the first `-group-`) is the manager; group 2 is
 		// the slug between `<manager>-group-` and the trailing 7-char hash.
-		return { manager, grouped: true, groupSlug: groupMatch[2] ?? null };
+		return {
+			manager: groupMatch[1] ?? null,
+			grouped: true,
+			groupSlug: groupMatch[2] ?? null,
+		};
 	}
+	const manager =
+		KNOWN_MANAGERS.find((name) =>
+			branch.startsWith(`${UPPY_BRANCH_PREFIX}${name}-`),
+		) ?? null;
 	return { manager, grouped: false, groupSlug: null };
 }
 
@@ -213,7 +203,10 @@ export function describeOpenPr(pr: {
  * (grouped) produces a different branch but the same intent.
  */
 function conflicts(group: DesiredGroup, pr: OpenUppyPr): boolean {
-	if (pr.manager && group.manager !== pr.manager) {
+	// Conflict intent is defined as the *same manager*. Require a positive match —
+	// a PR whose manager could not be parsed (a malformed or since-removed-manager
+	// branch) never blocks a dispatch purely on package-name overlap.
+	if (group.manager !== pr.manager) {
 		return false;
 	}
 	const slug = group.groupName ? branchSegment(group.groupName) : null;

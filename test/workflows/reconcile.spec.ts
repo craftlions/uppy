@@ -206,6 +206,22 @@ describe("reconcileDesiredGroups", () => {
 			describeOpenPr({ number: 1, head: { ref: "feature/x" }, body: "" }),
 		).toBeNull();
 	});
+
+	it("does not let an unknown-manager PR block via package overlap", () => {
+		// A grouped branch for a manager no longer in the binding map: its packages
+		// overlap the desired npm group, but the managers differ, so it must not block.
+		const stale = openPr({
+			number: 3,
+			head: { ref: "uppy/cargo-group-stuff-aaaaaaa" },
+			body: bodyWithTable([{ package: "x", from: "1.0.0", to: "1.1.0" }]),
+		});
+		expect(stale.manager).toBe("cargo");
+		const groups = buildDesiredGroups([
+			upgrade({ package: "x", target: "1.2.0" }),
+		]);
+		const [result] = reconcileDesiredGroups(groups, [stale]);
+		expect(result?.blockedBy).toBeUndefined();
+	});
 });
 
 describe("blocked PR annotation", () => {
