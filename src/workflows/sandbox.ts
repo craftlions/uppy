@@ -5,6 +5,7 @@ import { NonRetryableError } from "cloudflare:workflows";
 import { CommandExitError, Sandbox as E2bSandbox } from "e2b";
 import { type GithubApp, getApp } from "../github.ts";
 import { resolveUpgradeBranch, upgradesAreGrouped } from "./branches.ts";
+import { analyzeUpdate, type UpdateAiAnalysis } from "./update-ai.ts";
 
 /**
  * The published e2b template every Manager workflow boots from. Single source of
@@ -237,18 +238,53 @@ export function changelogUrl(upgrade: SafeUpgrade): string | undefined {
 }
 
 /**
+ * Render the Workers AI update-analysis section. Always renders a heading so the
+ * PR body shape is stable; when analysis was unavailable it renders the short
+ * fallback note instead of summary/risks/test hints. Returns the Markdown lines
+ * (no trailing blank line) so {@link renderPrBody} can splice them in.
+ */
+function renderAiSection(analysis: UpdateAiAnalysis): string[] {
+	const lines = ["### 🤖 Update analysis", ""];
+	if (analysis.unavailableReason) {
+		lines.push(`_${analysis.unavailableReason}_`);
+		return lines;
+	}
+	lines.push(analysis.summary);
+	if (analysis.risks.length > 0) {
+		lines.push("", "**Risks & behavior changes**");
+		for (const risk of analysis.risks) {
+			lines.push(`- ${risk}`);
+		}
+	}
+	if (analysis.testHints.length > 0) {
+		lines.push("", "**Worth testing**");
+		for (const hint of analysis.testHints) {
+			lines.push(`- ${hint}`);
+		}
+	}
+	lines.push(
+		"",
+		"_AI-generated and may be imperfect — verify before merging._",
+	);
+	return lines;
+}
+
+/**
  * Render the PR body: a structured metadata header listing each upgrade, an
- * optional link back to the Dependency Dashboard issue, per-package
- * changelog/release-notes links where available, and a GitHub compare/diff link
- * for the update branch. Renovate-style — reviewers are pointed at release
- * information and GitHub's own diff UI rather than an inline patch. The single
- * source of the PR-body Markdown shape.
+ * optional Workers AI update-analysis section, per-package changelog/release-notes
+ * links where available, a GitHub compare/diff link for the update branch, and an
+ * optional link back to the Dependency Dashboard issue. Renovate-style — reviewers
+ * are pointed at release information and GitHub's own diff UI rather than an inline
+ * patch. The single source of the PR-body Markdown shape. The AI analysis is passed
+ * in as a structured result so rendering stays deterministic and never re-runs
+ * prompt construction.
  */
 export function renderPrBody(
 	upgrades: SafeUpgrade[],
 	compareUrl: string,
 	dashboardIssueUrl?: string,
 	instanceId?: string,
+	analysis?: UpdateAiAnalysis,
 ): string {
 	if (upgrades.length === 0) {
 		throw new Error("renderPrBody requires at least one upgrade");
@@ -263,6 +299,9 @@ export function renderPrBody(
 		);
 	}
 	lines.push("");
+	if (analysis) {
+		lines.push(...renderAiSection(analysis), "");
+	}
 	const changelogLines = upgrades
 		.map((upgrade) => {
 			const url = changelogUrl(upgrade);
@@ -336,10 +375,30 @@ function commitMessageWithSignoff(message: string): string {
 
 interface CompareFileLike {
 	filename?: string;
+	// The per-file patch is no longer rendered in the PR body (see #26), but it is
+	// still read to assemble the diff text fed to the Workers AI update analysis.
+	patch?: string;
 }
 
 interface CompareCommitLike {
 	sha?: string;
+}
+
+/**
+ * Reassemble a unified diff from the compare API's per-file patches. Used only to
+ * build the bounded input for the Workers AI analysis — the PR body itself links
+ * to GitHub's diff UI rather than inlining this (see #26).
+ */
+function renderCompareDiff(files: CompareFileLike[] = []): string {
+	return files
+		.map((file) => {
+			const filename = file.filename ?? "unknown";
+			const patch = file.patch ?? "";
+			return [`diff --git a/${filename} b/${filename}`, patch]
+				.filter(Boolean)
+				.join("\n");
+		})
+		.join("\n");
 }
 
 interface CompareResponseLike {
@@ -725,7 +784,11 @@ export async function runManagerUpgrade(
 		);
 	});
 
-	await step.do("open-or-update-pr", async () => {
+	// Return the compare-derived fields rather than mutating `result` inside the
+	// step: on a Workflow replay a completed step returns its checkpointed value
+	// without re-running its callback, so the assignments below must live in the
+	// function body (which always runs) to survive replay for the later steps.
+	const compared = await step.do("compare-branch", async () => {
 		const octokit = await getApp().getInstallationOctokit(
 			params.installationId,
 		);
@@ -736,9 +799,34 @@ export async function runManagerUpgrade(
 		})) as CompareResponseLike;
 		const commits = compare.data?.commits ?? [];
 		const files = compare.data?.files ?? [];
-		result.commitSha = commits.at(-1)?.sha ?? result.commitSha;
-		result.filesChanged = files.length || result.filesChanged;
+		// The diff is captured for the Workers AI analysis only — it is deliberately
+		// not rendered in the PR body (see #26: the body links to GitHub's diff UI
+		// instead of inlining the patch) nor stored on `SandboxResult`.
+		return {
+			commitSha: commits.at(-1)?.sha,
+			diff: renderCompareDiff(files),
+			filesChanged: files.length,
+		};
+	});
+	result.commitSha = compared.commitSha ?? result.commitSha;
+	result.filesChanged = compared.filesChanged || result.filesChanged;
 
+	// Run the Workers AI analysis in its own checkpointed step so a retry of the
+	// PR create/update below never re-runs the model and burns the free Neuron
+	// allocation. `analyzeUpdate` degrades gracefully and never throws, so this
+	// step never fails the upgrade.
+	const analysis = await step.do("analyze-update", async () =>
+		analyzeUpdate(
+			env.AI,
+			{ upgrades, diff: compared.diff },
+			{ model: env.UPDATE_AI_MODEL },
+		),
+	);
+
+	await step.do("open-or-update-pr", async () => {
+		const octokit = await getApp().getInstallationOctokit(
+			params.installationId,
+		);
 		const body = renderPrBody(
 			upgrades,
 			buildCompareUrl(
@@ -749,6 +837,7 @@ export async function runManagerUpgrade(
 			),
 			await dashboardIssueUrl(octokit, params),
 			params.instanceId,
+			analysis,
 		);
 		// The PR title and commit subject share the structured `chore(deps): …` shape.
 		const title = commitMessage;
