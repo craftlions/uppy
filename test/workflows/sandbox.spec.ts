@@ -68,6 +68,8 @@ import { safeUpgradeGroupBranch } from "../../src/workflows/branches.ts";
 import {
 	BOT_EMAIL,
 	BOT_NAME,
+	buildCompareUrl,
+	changelogUrl,
 	DASHBOARD_TITLE,
 	E2B_TEMPLATE,
 	findDashboardIssue,
@@ -298,33 +300,113 @@ beforeEach(() => {
 	vi.clearAllMocks();
 });
 
-describe("renderPrBody", () => {
-	const result = {
-		commitSha: "abc",
-		branch: BRANCH,
-		diff: "+x\n",
-		filesChanged: 1,
-	};
+describe("buildCompareUrl", () => {
+	it("builds a GitHub compare URL for base...head", () => {
+		expect(buildCompareUrl("craftlions", "website", "main", BRANCH)).toBe(
+			`https://github.com/craftlions/website/compare/main...${BRANCH}`,
+		);
+	});
+});
 
-	it("renders the structured table, diff, and dashboard link", () => {
-		const body = renderPrBody([upgrade], result, "https://gh/issues/1");
+describe("changelogUrl", () => {
+	it("links npm packages to their npm registry version page", () => {
+		expect(
+			changelogUrl({
+				manager: "npm",
+				manifest: "package.json",
+				package: "@astrojs/alpha",
+				current: "1.0.0",
+				target: "1.1.0",
+				updateType: "minor",
+			}),
+		).toBe("https://www.npmjs.com/package/@astrojs/alpha/v/1.1.0");
+	});
+
+	it("links mise npm-backend packages to their npm registry version page", () => {
+		expect(changelogUrl(upgrade)).toBe(
+			"https://www.npmjs.com/package/@openai/codex/v/0.64.0",
+		);
+	});
+
+	it("links mise github-backend packages to the repo releases page", () => {
+		expect(
+			changelogUrl({
+				manager: "mise",
+				manifest: "mise.toml",
+				package: "github:endevco/aube",
+				current: "1.18.1",
+				target: "1.18.2",
+				updateType: "patch",
+			}),
+		).toBe("https://github.com/endevco/aube/releases");
+	});
+
+	it("links github-actions to the action repo releases page", () => {
+		expect(
+			changelogUrl({
+				manager: "github-actions",
+				manifest: ".github/workflows/ci.yml",
+				package: "actions/checkout",
+				current: "v4.1.0",
+				target: "v4.2.0",
+				updateType: "minor",
+			}),
+		).toBe("https://github.com/actions/checkout/releases");
+	});
+
+	it("returns undefined for mise backends with no repo or registry coordinate", () => {
+		expect(
+			changelogUrl({
+				manager: "mise",
+				manifest: "mise.toml",
+				package: "core:node",
+				current: "20.0.0",
+				target: "20.1.0",
+				updateType: "minor",
+			}),
+		).toBeUndefined();
+		expect(
+			changelogUrl({
+				manager: "mise",
+				manifest: "mise.toml",
+				package: "aqua:aws/aws-cli",
+				current: "2.0.0",
+				target: "2.1.0",
+				updateType: "minor",
+			}),
+		).toBeUndefined();
+	});
+});
+
+describe("renderPrBody", () => {
+	const COMPARE_URL = `https://github.com/craftlions/website/compare/main...${BRANCH}`;
+
+	it("renders the structured table, changelog, compare link, and dashboard link", () => {
+		const body = renderPrBody([upgrade], COMPARE_URL, "https://gh/issues/1");
 		expect(body).toContain("| Package | From | To | Manifest | Bump type |");
 		expect(body).toContain("| --- | --- | --- | --- | --- |");
 		expect(body).toContain(
 			"| `npm:@openai/codex` | `0.63.0` | `0.64.0` | `mise.toml` | minor |",
 		);
+		expect(body).toContain(
+			"- [`npm:@openai/codex` release notes](https://www.npmjs.com/package/@openai/codex/v/0.64.0)",
+		);
+		expect(body).toContain(`Review the [full diff](${COMPARE_URL}) on GitHub.`);
 		expect(body).toContain("[Dependency Dashboard](https://gh/issues/1)");
-		expect(body).toContain("```diff");
+	});
+
+	it("never includes an inline fenced diff block", () => {
+		expect(renderPrBody([upgrade], COMPARE_URL)).not.toContain("```diff");
 	});
 
 	it("omits the dashboard link when no issue url is given", () => {
-		expect(renderPrBody([upgrade], result)).not.toContain(
+		expect(renderPrBody([upgrade], COMPARE_URL)).not.toContain(
 			"Dependency Dashboard",
 		);
 	});
 
-	it("renders multiple upgrades in one table", () => {
-		const body = renderPrBody([astroAlpha, astroBeta], result);
+	it("renders multiple upgrades in one table with a changelog link each", () => {
+		const body = renderPrBody([astroAlpha, astroBeta], COMPARE_URL);
 		const headerCount = (
 			body.match(/\| Package \| From \| To \| Manifest \| Bump type \|/g) ?? []
 		).length;
@@ -335,12 +417,32 @@ describe("renderPrBody", () => {
 		expect(body).toContain(
 			"| `npm:@astrojs/beta` | `2.0.0` | `2.1.0` | `mise.toml` | minor |",
 		);
+		expect(body).toContain(
+			"- [`npm:@astrojs/alpha` release notes](https://www.npmjs.com/package/@astrojs/alpha/v/1.1.0)",
+		);
+		expect(body).toContain(
+			"- [`npm:@astrojs/beta` release notes](https://www.npmjs.com/package/@astrojs/beta/v/2.1.0)",
+		);
+	});
+
+	it("omits the release-notes section when no changelog url is available", () => {
+		const coreUpgrade: SafeUpgrade = {
+			manager: "mise",
+			manifest: "mise.toml",
+			package: "core:node",
+			current: "20.0.0",
+			target: "20.1.0",
+			updateType: "minor",
+		};
+		const body = renderPrBody([coreUpgrade], COMPARE_URL);
+		expect(body).not.toContain("Release notes:");
+		expect(body).toContain(`Review the [full diff](${COMPARE_URL}) on GitHub.`);
 	});
 
 	it("includes the workflow instance id as a footer line", () => {
 		const body = renderPrBody(
 			[upgrade],
-			result,
+			COMPARE_URL,
 			undefined,
 			"craftlions-website-abc123-mise",
 		);
@@ -350,7 +452,7 @@ describe("renderPrBody", () => {
 	});
 
 	it("omits the workflow instance id when not provided", () => {
-		const body = renderPrBody([upgrade], result);
+		const body = renderPrBody([upgrade], COMPARE_URL);
 		expect(body).not.toContain("Workflow instance:");
 	});
 });

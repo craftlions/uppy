@@ -84,7 +84,6 @@ export interface UpgradeParams {
 export interface SandboxResult {
 	commitSha: string;
 	branch: string;
-	diff: string;
 	filesChanged: number;
 }
 
@@ -185,14 +184,69 @@ export async function mintInstallationToken(
 	return data.token;
 }
 
+/** Build the GitHub compare/diff URL for `base...head` in `owner/repo`. */
+export function buildCompareUrl(
+	owner: string,
+	repo: string,
+	base: string,
+	head: string,
+): string {
+	return `https://github.com/${owner}/${repo}/compare/${base}...${head}`;
+}
+
+/** Splits a mise backend identity (`npm:@openai/codex`) into backend + name. */
+const MISE_BACKEND = /^([a-z]+):(.+)$/;
+
+/**
+ * A changelog / release-notes URL for the upgraded dependency, derived purely
+ * from the package identity uppy already carries, or `undefined` when the
+ * package's datasource cannot supply one from existing metadata. Renovate-style:
+ * the PR body links reviewers to release information instead of inlining it.
+ *
+ * - npm packages (and mise's `npm:` backend) point at the npm registry's version
+ *   page, which links onward to the project's repository and changelog.
+ * - GitHub-sourced packages (mise's `github:` backend, github-actions'
+ *   `owner/repo`) point at the repository's releases page.
+ *
+ * Other mise backends (`core:`, `aqua:`) carry no repository or registry coordinate
+ * in the upgrade metadata, so they return `undefined` rather than guess; closing
+ * that gap is follow-up datasource work (see issue #22).
+ */
+export function changelogUrl(upgrade: SafeUpgrade): string | undefined {
+	if (upgrade.manager === "npm") {
+		return `https://www.npmjs.com/package/${upgrade.package}/v/${upgrade.target}`;
+	}
+	if (upgrade.manager === "github-actions") {
+		return `https://github.com/${upgrade.package}/releases`;
+	}
+	if (upgrade.manager === "mise") {
+		const match = MISE_BACKEND.exec(upgrade.package);
+		const backend = match?.[1];
+		const name = match?.[2];
+		if (backend === undefined || name === undefined) {
+			return undefined;
+		}
+		if (backend === "npm") {
+			return `https://www.npmjs.com/package/${name}/v/${upgrade.target}`;
+		}
+		if (backend === "github") {
+			return `https://github.com/${name}/releases`;
+		}
+	}
+	return undefined;
+}
+
 /**
  * Render the PR body: a structured metadata header listing each upgrade, an
- * optional link back to the Dependency Dashboard issue, and the inline diff.
- * The single source of the PR-body Markdown shape.
+ * optional link back to the Dependency Dashboard issue, per-package
+ * changelog/release-notes links where available, and a GitHub compare/diff link
+ * for the update branch. Renovate-style — reviewers are pointed at release
+ * information and GitHub's own diff UI rather than an inline patch. The single
+ * source of the PR-body Markdown shape.
  */
 export function renderPrBody(
 	upgrades: SafeUpgrade[],
-	result: SandboxResult,
+	compareUrl: string,
 	dashboardIssueUrl?: string,
 	instanceId?: string,
 ): string {
@@ -209,6 +263,18 @@ export function renderPrBody(
 		);
 	}
 	lines.push("");
+	const changelogLines = upgrades
+		.map((upgrade) => {
+			const url = changelogUrl(upgrade);
+			return url === undefined
+				? undefined
+				: `- [\`${upgrade.package}\` release notes](${url})`;
+		})
+		.filter((line): line is string => line !== undefined);
+	if (changelogLines.length > 0) {
+		lines.push("Release notes:", "", ...changelogLines, "");
+	}
+	lines.push(`Review the [full diff](${compareUrl}) on GitHub.`, "");
 	if (dashboardIssueUrl) {
 		lines.push(
 			`See the uppy [Dependency Dashboard](${dashboardIssueUrl}) for the broader context.`,
@@ -218,7 +284,6 @@ export function renderPrBody(
 	if (instanceId) {
 		lines.push(`Workflow instance: \`${instanceId}\``, "");
 	}
-	lines.push("```diff", result.diff.trimEnd(), "```", "");
 	return lines.join("\n");
 }
 
@@ -271,7 +336,6 @@ function commitMessageWithSignoff(message: string): string {
 
 interface CompareFileLike {
 	filename?: string;
-	patch?: string;
 }
 
 interface CompareCommitLike {
@@ -311,18 +375,6 @@ interface GitCreateCommitResponseLike {
 	data: {
 		sha: string;
 	};
-}
-
-function renderCompareDiff(files: CompareFileLike[] = []): string {
-	return files
-		.map((file) => {
-			const filename = file.filename ?? "unknown";
-			const patch = file.patch ?? "";
-			return [`diff --git a/${filename} b/${filename}`, patch]
-				.filter(Boolean)
-				.join("\n");
-		})
-		.join("\n");
 }
 
 function isNotFound(error: unknown): boolean {
@@ -673,7 +725,6 @@ export async function runManagerUpgrade(
 				return {
 					commitSha: "",
 					branch,
-					diff: "",
 					filesChanged,
 					changes,
 				} satisfies SandboxUpgradeResult;
@@ -705,12 +756,16 @@ export async function runManagerUpgrade(
 		const commits = compare.data?.commits ?? [];
 		const files = compare.data?.files ?? [];
 		result.commitSha = commits.at(-1)?.sha ?? result.commitSha;
-		result.diff = renderCompareDiff(files);
 		result.filesChanged = files.length || result.filesChanged;
 
 		const body = renderPrBody(
 			upgrades,
-			result,
+			buildCompareUrl(
+				params.organization,
+				params.repository,
+				params.defaultBranch,
+				branch,
+			),
 			await dashboardIssueUrl(octokit, params),
 			params.instanceId,
 		);
@@ -739,7 +794,6 @@ export async function runManagerUpgrade(
 	return {
 		commitSha: result.commitSha,
 		branch: result.branch,
-		diff: result.diff,
 		filesChanged: result.filesChanged,
 	};
 }
