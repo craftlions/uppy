@@ -76,6 +76,47 @@ describe("safeUpgradeGroupBranch", () => {
 		expect(first).toBe(second);
 		expect(first).toMatch(/^uppy\/npm-group-Astro-[a-f0-9]{7}$/);
 	});
+
+	it("produces a distinct branch when the same group targets newer versions", () => {
+		const older = safeUpgradeGroupBranch("npm", "Astro", [
+			{
+				manager: "npm",
+				manifest: "package.json",
+				package: "astro",
+				current: "1.0.0",
+				target: "1.1.0",
+				updateType: "minor",
+			},
+			{
+				manager: "npm",
+				manifest: "package.json",
+				package: "@astrojs/rss",
+				current: "1.0.0",
+				target: "1.1.0",
+				updateType: "minor",
+			},
+		]);
+		const newer = safeUpgradeGroupBranch("npm", "Astro", [
+			{
+				manager: "npm",
+				manifest: "package.json",
+				package: "astro",
+				current: "1.1.0",
+				target: "1.2.0",
+				updateType: "minor",
+			},
+			{
+				manager: "npm",
+				manifest: "package.json",
+				package: "@astrojs/rss",
+				current: "1.1.0",
+				target: "1.2.0",
+				updateType: "minor",
+			},
+		]);
+		expect(newer).not.toBe(older);
+		expect(newer).toMatch(/^uppy\/npm-group-Astro-[a-f0-9]{7}$/);
+	});
 });
 
 describe("managerWorkflowBinding", () => {
