@@ -201,6 +201,26 @@ describe("reconcileDesiredGroups", () => {
 		expect(result?.blockedBy?.number).toBe(4);
 	});
 
+	it("blocks on an older conflicting PR even when a newer exact-branch PR exists", () => {
+		// Two concurrent runs left #5 (x→1.1.0) and #9 (x→1.2.0) open. A desired
+		// group targeting #9's exact branch must still be blocked by the older #5.
+		const older = openPr({
+			number: 5,
+			head: { ref: "uppy/npm-x-1.1.0" },
+			body: bodyWithTable([{ package: "x", from: "1.0.0", to: "1.1.0" }]),
+		});
+		const newerExact = openPr({
+			number: 9,
+			head: { ref: "uppy/npm-x-1.2.0" },
+			body: bodyWithTable([{ package: "x", from: "1.0.0", to: "1.2.0" }]),
+		});
+		const groups = buildDesiredGroups([
+			upgrade({ package: "x", target: "1.2.0" }),
+		]);
+		const [result] = reconcileDesiredGroups(groups, [older, newerExact]);
+		expect(result?.blockedBy?.number).toBe(5);
+	});
+
 	it("ignores non-uppy PRs entirely", () => {
 		expect(
 			describeOpenPr({ number: 1, head: { ref: "feature/x" }, body: "" }),
@@ -225,21 +245,25 @@ describe("reconcileDesiredGroups", () => {
 });
 
 describe("blocked PR annotation", () => {
-	const group = buildDesiredGroups([
-		upgrade({ package: "x", target: "1.2.0" }),
-	])[0];
-	if (!group) {
-		throw new Error("expected a desired group");
-	}
+	const upgrades = [upgrade({ package: "x", target: "1.2.0" })];
 
 	it("renders a comment carrying the dedupe marker and the newer target", () => {
-		const comment = renderBlockedComment(group);
+		const comment = renderBlockedComment(upgrades);
 		expect(comment).toContain(BLOCKED_COMMENT_MARKER);
 		expect(comment).toContain("1.2.0");
 	});
 
+	it("lists every held-back upgrade when one PR blocks several groups", () => {
+		const comment = renderBlockedComment([
+			upgrade({ package: "x", target: "1.2.0" }),
+			upgrade({ package: "y", target: "2.0.0" }),
+		]);
+		expect(comment).toContain("`x` → `1.2.0`");
+		expect(comment).toContain("`y` → `2.0.0`");
+	});
+
 	it("detects an already-posted comment so it is added at most once", () => {
-		expect(hasBlockedComment([{ body: renderBlockedComment(group) }])).toBe(
+		expect(hasBlockedComment([{ body: renderBlockedComment(upgrades) }])).toBe(
 			true,
 		);
 		expect(hasBlockedComment([{ body: "unrelated chatter" }])).toBe(false);
@@ -247,15 +271,15 @@ describe("blocked PR annotation", () => {
 	});
 
 	it("prepends the warning block and preserves the original body", () => {
-		const updated = upsertBlockedWarning("Original PR body.", group);
+		const updated = upsertBlockedWarning("Original PR body.", upgrades);
 		expect(updated.startsWith(BLOCKED_WARNING_START)).toBe(true);
 		expect(updated).toContain(BLOCKED_WARNING_END);
 		expect(updated).toContain("Original PR body.");
 	});
 
 	it("refreshes the warning block in place without duplicating it", () => {
-		const once = upsertBlockedWarning("Original PR body.", group);
-		const twice = upsertBlockedWarning(once, group);
+		const once = upsertBlockedWarning("Original PR body.", upgrades);
+		const twice = upsertBlockedWarning(once, upgrades);
 		expect(twice.split(BLOCKED_WARNING_START)).toHaveLength(2);
 		expect(twice.split(BLOCKED_WARNING_END)).toHaveLength(2);
 		expect(twice).toContain("Original PR body.");

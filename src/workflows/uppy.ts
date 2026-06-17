@@ -40,7 +40,6 @@ import {
 import { DEFERRED_MANAGERS, managerWorkflowBinding } from "./dispatch.ts";
 import {
 	buildDesiredGroups,
-	type DesiredGroup,
 	describeOpenPr,
 	hasBlockedComment,
 	type OpenUppyPr,
@@ -311,13 +310,18 @@ export class UppyWorkflow extends WorkflowEntrypoint<Env, Params> {
 		if (blocked.length > 0) {
 			await step.do("annotate-blocked-prs", async () => {
 				const { octokit } = await repositoryAccessFor(organization, repository);
-				const byPr = new Map<number, DesiredGroup>();
+				// Aggregate every held-back upgrade per blocking PR: one PR can block
+				// several desired groups at once, and the annotation must list them all.
+				const byPr = new Map<number, SafeUpgrade[]>();
 				for (const entry of blocked) {
-					if (entry.blockedBy && !byPr.has(entry.blockedBy.number)) {
-						byPr.set(entry.blockedBy.number, entry.group);
+					if (!entry.blockedBy) {
+						continue;
 					}
+					const list = byPr.get(entry.blockedBy.number) ?? [];
+					list.push(...entry.group.upgrades);
+					byPr.set(entry.blockedBy.number, list);
 				}
-				for (const [prNumber, group] of byPr) {
+				for (const [prNumber, upgrades] of byPr) {
 					const { data: comments } = await octokit.rest.issues.listComments({
 						owner: organization,
 						repo: repository,
@@ -329,7 +333,7 @@ export class UppyWorkflow extends WorkflowEntrypoint<Env, Params> {
 							owner: organization,
 							repo: repository,
 							issue_number: prNumber,
-							body: renderBlockedComment(group),
+							body: renderBlockedComment(upgrades),
 						});
 					}
 					const { data: pr } = await octokit.rest.pulls.get({
@@ -337,7 +341,7 @@ export class UppyWorkflow extends WorkflowEntrypoint<Env, Params> {
 						repo: repository,
 						pull_number: prNumber,
 					});
-					const updatedBody = upsertBlockedWarning(pr.body ?? "", group);
+					const updatedBody = upsertBlockedWarning(pr.body ?? "", upgrades);
 					if (updatedBody !== (pr.body ?? "")) {
 						await octokit.rest.pulls.update({
 							owner: organization,

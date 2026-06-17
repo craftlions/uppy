@@ -220,11 +220,15 @@ function conflicts(group: DesiredGroup, pr: OpenUppyPr): boolean {
 /**
  * Reconcile desired upgrade groups against open uppy PRs.
  *
- * For each group, an exact branch match means the open PR *is* this intent and
- * will simply be updated in place — never a conflict. Otherwise the oldest open
- * uppy PR (lowest number) that overlaps the group's dependency intent blocks it:
- * dispatch is suppressed and the caller annotates that existing PR. A group with
- * no exact match and no overlap dispatches normally.
+ * For each group the *oldest* open uppy PR (lowest number) with overlapping
+ * dependency intent decides the outcome: when that oldest PR's branch matches the
+ * group's branch the PR *is* this intent and is updated in place; otherwise it is
+ * an older, distinct PR that blocks the newer update — dispatch is suppressed and
+ * the caller annotates it. A group with no overlapping PR dispatches normally.
+ *
+ * Anchoring on the oldest conflicting PR (rather than short-circuiting on any
+ * exact branch match) preserves the invariant even when a newer exact-branch PR
+ * already exists alongside an older conflicting one: the older PR still blocks.
  */
 export function reconcileDesiredGroups(
 	groups: DesiredGroup[],
@@ -232,22 +236,23 @@ export function reconcileDesiredGroups(
 ): ReconciledGroup[] {
 	const byNumber = [...openPrs].sort((a, b) => a.number - b.number);
 	return groups.map((group) => {
-		const exactMatch = byNumber.find((pr) => pr.branch === group.branch);
-		if (exactMatch) {
+		const oldestConflict = byNumber.find((pr) => conflicts(group, pr));
+		if (!oldestConflict || oldestConflict.branch === group.branch) {
 			return { group };
 		}
-		const blockedBy = byNumber.find((pr) => conflicts(group, pr));
-		return blockedBy ? { group, blockedBy } : { group };
+		return { group, blockedBy: oldestConflict };
 	});
 }
 
 /**
  * The human-readable explanation shared by the blocked PR's comment and its body
  * warning block. Names the packages and the newer target(s) being held back so
- * the user knows exactly what merging or closing this PR unblocks.
+ * the user knows exactly what merging or closing this PR unblocks. Takes the full
+ * set of held-back upgrades — a single PR can block several desired groups at
+ * once, and every one of them must be listed.
  */
-function blockedExplanation(group: DesiredGroup): string {
-	const targets = group.upgrades
+function blockedExplanation(upgrades: SafeUpgrade[]): string {
+	const targets = upgrades
 		.map((u) => `\`${u.package}\` → \`${u.target}\``)
 		.join(", ");
 	return (
@@ -259,8 +264,8 @@ function blockedExplanation(group: DesiredGroup): string {
 }
 
 /** The one-time comment body posted to a blocked PR, carrying its dedupe marker. */
-export function renderBlockedComment(group: DesiredGroup): string {
-	return `${BLOCKED_COMMENT_MARKER}\n\n> [!NOTE]\n> ${blockedExplanation(group)}`;
+export function renderBlockedComment(upgrades: SafeUpgrade[]): string {
+	return `${BLOCKED_COMMENT_MARKER}\n\n> [!NOTE]\n> ${blockedExplanation(upgrades)}`;
 }
 
 /** Whether any existing comment already carries the blocked-update marker. */
@@ -279,12 +284,12 @@ export function hasBlockedComment(
  */
 export function upsertBlockedWarning(
 	body: string,
-	group: DesiredGroup,
+	upgrades: SafeUpgrade[],
 ): string {
 	const block = [
 		BLOCKED_WARNING_START,
 		"> [!WARNING]",
-		`> ${blockedExplanation(group)}`,
+		`> ${blockedExplanation(upgrades)}`,
 		BLOCKED_WARNING_END,
 	].join("\n");
 
