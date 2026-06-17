@@ -30,6 +30,9 @@
   "assets": {
     "binding": "ASSETS"
   },
+  "ai": {
+    "binding": "AI"
+  },
   "workers_dev": true,
   "preview_urls": false,
   "limits": {
@@ -37,7 +40,8 @@
   },
   "upload_source_maps": true,
   "vars": {
-    "GITHUB_APP_ID": "3924701"
+    "GITHUB_APP_ID": "3924701",
+    "UPDATE_AI_MODEL": "@cf/meta/llama-3.2-1b-instruct"
   },
   "workflows": [
     {

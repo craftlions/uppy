@@ -455,6 +455,49 @@ describe("renderPrBody", () => {
 		const body = renderPrBody([upgrade], COMPARE_URL);
 		expect(body).not.toContain("Workflow instance:");
 	});
+
+	it("omits the AI analysis section when no analysis is provided", () => {
+		const body = renderPrBody([upgrade], COMPARE_URL);
+		expect(body).not.toContain("Update analysis");
+	});
+
+	it("renders the AI summary, risks, and test hints when analysis succeeds", () => {
+		const body = renderPrBody([upgrade], COMPARE_URL, undefined, undefined, {
+			summary: "Low-risk minor bump.",
+			risks: ["CLI flag default changed."],
+			testHints: ["Run the codex smoke test."],
+		});
+		expect(body).toContain("### 🤖 Update analysis");
+		expect(body).toContain("Low-risk minor bump.");
+		expect(body).toContain("**Risks & behavior changes**");
+		expect(body).toContain("- CLI flag default changed.");
+		expect(body).toContain("**Worth testing**");
+		expect(body).toContain("- Run the codex smoke test.");
+	});
+
+	it("renders the fallback note (no risk/test sections) when analysis is unavailable", () => {
+		const body = renderPrBody([upgrade], COMPARE_URL, undefined, undefined, {
+			summary: "",
+			risks: [],
+			testHints: [],
+			unavailableReason: "AI analysis was unavailable for this update.",
+		});
+		expect(body).toContain("### 🤖 Update analysis");
+		expect(body).toContain("_AI analysis was unavailable for this update._");
+		expect(body).not.toContain("**Risks & behavior changes**");
+		expect(body).not.toContain("**Worth testing**");
+	});
+
+	it("omits empty risk and test-hint sections when the model returns none", () => {
+		const body = renderPrBody([upgrade], COMPARE_URL, undefined, undefined, {
+			summary: "Nothing notable.",
+			risks: [],
+			testHints: [],
+		});
+		expect(body).toContain("Nothing notable.");
+		expect(body).not.toContain("**Risks & behavior changes**");
+		expect(body).not.toContain("**Worth testing**");
+	});
 });
 
 describe("normalizeUpgrades", () => {
@@ -672,6 +715,70 @@ describe("runManagerUpgrade", () => {
 				title: "chore(deps): update npm:@openai/codex from 0.63.0 to 0.64.0",
 			}),
 		);
+	});
+
+	// The body the worker sent to `pulls.create`, or undefined when none was sent.
+	const createdBody = (octokit: ReturnType<typeof makeOctokit>) => {
+		const calls = octokit.rest.pulls.create.mock.calls as unknown as [
+			{ body?: string },
+		][];
+		return calls[0]?.[0]?.body;
+	};
+
+	it("runs Workers AI once and embeds the analysis section in the PR body", async () => {
+		const run = vi.fn(async (_model: string) => ({
+			response: JSON.stringify({
+				summary: "Low-risk minor bump.",
+				risks: ["Watch the changed CLI flag."],
+				testHints: ["Run the codex smoke test."],
+			}),
+		}));
+		const aiEnv = {
+			E2B_API_KEY: "k",
+			AI: { run },
+			UPDATE_AI_MODEL: "@cf/meta/llama-3.2-1b-instruct",
+		} as unknown as Env;
+		h.sandbox = makeSandbox();
+		h.octokit = makeOctokit({ closed: [], open: [] });
+
+		await runManagerUpgrade(aiEnv, step, params, spec);
+
+		expect(run).toHaveBeenCalledTimes(1);
+		expect(run.mock.calls[0]?.[0]).toBe("@cf/meta/llama-3.2-1b-instruct");
+		const octokit = h.octokit as ReturnType<typeof makeOctokit>;
+		const body = createdBody(octokit) ?? "";
+		expect(body).toContain("### 🤖 Update analysis");
+		expect(body).toContain("Low-risk minor bump.");
+		expect(body).toContain("- Run the codex smoke test.");
+	});
+
+	it("still opens the PR with a fallback note when Workers AI fails", async () => {
+		const run = vi.fn(async () => {
+			throw new Error("over free allocation");
+		});
+		const aiEnv = { E2B_API_KEY: "k", AI: { run } } as unknown as Env;
+		h.sandbox = makeSandbox();
+		h.octokit = makeOctokit({ closed: [], open: [] });
+
+		await runManagerUpgrade(aiEnv, step, params, spec);
+
+		const octokit = h.octokit as ReturnType<typeof makeOctokit>;
+		expect(octokit.rest.pulls.create).toHaveBeenCalledTimes(1);
+		const body = createdBody(octokit) ?? "";
+		expect(body).toContain("### 🤖 Update analysis");
+		expect(body).not.toContain("Low-risk minor bump.");
+	});
+
+	it("opens the PR with a fallback note when no AI binding is configured", async () => {
+		h.sandbox = makeSandbox();
+		h.octokit = makeOctokit({ closed: [], open: [] });
+
+		await runManagerUpgrade(env, step, params, spec);
+
+		const octokit = h.octokit as ReturnType<typeof makeOctokit>;
+		const body = createdBody(octokit) ?? "";
+		expect(body).toContain("### 🤖 Update analysis");
+		expect(body).toContain("_AI analysis is not configured for this Worker._");
 	});
 
 	it("updates the existing open PR instead of opening a new one", async () => {
