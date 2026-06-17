@@ -39,6 +39,17 @@ import {
 } from "../vulnerability-alerts.ts";
 import { DEFERRED_MANAGERS, managerWorkflowBinding } from "./dispatch.ts";
 import {
+	buildDesiredGroups,
+	type DesiredGroup,
+	describeOpenPr,
+	hasBlockedComment,
+	type OpenUppyPr,
+	reconcileDesiredGroups,
+	renderBlockedComment,
+	UPPY_BRANCH_PREFIX,
+	upsertBlockedWarning,
+} from "./reconcile.ts";
+import {
 	DASHBOARD_TITLE,
 	findDashboardIssue,
 	type UpgradeParams,
@@ -259,10 +270,90 @@ export class UppyWorkflow extends WorkflowEntrypoint<Env, Params> {
 			(upgrade) => !DEFERRED_MANAGERS.has(upgrade.manager),
 		);
 
+		// Group desired upgrades exactly as dispatch does, so the branch we predict
+		// for conflict detection matches the branch the Manager workflow creates.
+		const desiredGroups = buildDesiredGroups(dispatchable);
+
+		// Reconcile against open uppy PRs before dispatching: a newer update whose
+		// intent overlaps an already-open uppy PR is held back (the older PR is
+		// annotated) so at most one PR per dependency intent stays open. Groups with
+		// no conflicting open PR — or whose branch already matches one (an in-place
+		// update) — dispatch as today.
+		const openUppyPrs =
+			desiredGroups.length > 0
+				? await step.do("list-open-uppy-prs", async () => {
+						const { octokit } = await repositoryAccessFor(
+							organization,
+							repository,
+						);
+						const { data: prs } = await octokit.rest.pulls.list({
+							owner: organization,
+							repo: repository,
+							state: "open",
+							per_page: 100,
+						});
+						return prs
+							.filter((pr) => pr.head?.ref?.startsWith(UPPY_BRANCH_PREFIX))
+							.map((pr) => describeOpenPr(pr))
+							.filter((pr): pr is OpenUppyPr => pr !== null);
+					})
+				: [];
+
+		const reconciled = reconcileDesiredGroups(desiredGroups, openUppyPrs);
+		const blocked = reconciled.filter((entry) => entry.blockedBy);
+		const allowedGroups = reconciled
+			.filter((entry) => !entry.blockedBy)
+			.map((entry) => entry.group);
+
+		// Annotate each blocked PR once: a single explanatory comment across runs and
+		// an idempotent warning block at the top of the PR body. Keyed by PR number
+		// so two desired groups blocked by the same PR annotate it only once.
+		if (blocked.length > 0) {
+			await step.do("annotate-blocked-prs", async () => {
+				const { octokit } = await repositoryAccessFor(organization, repository);
+				const byPr = new Map<number, DesiredGroup>();
+				for (const entry of blocked) {
+					if (entry.blockedBy && !byPr.has(entry.blockedBy.number)) {
+						byPr.set(entry.blockedBy.number, entry.group);
+					}
+				}
+				for (const [prNumber, group] of byPr) {
+					const { data: comments } = await octokit.rest.issues.listComments({
+						owner: organization,
+						repo: repository,
+						issue_number: prNumber,
+						per_page: 100,
+					});
+					if (!hasBlockedComment(comments)) {
+						await octokit.rest.issues.createComment({
+							owner: organization,
+							repo: repository,
+							issue_number: prNumber,
+							body: renderBlockedComment(group),
+						});
+					}
+					const { data: pr } = await octokit.rest.pulls.get({
+						owner: organization,
+						repo: repository,
+						pull_number: prNumber,
+					});
+					const updatedBody = upsertBlockedWarning(pr.body ?? "", group);
+					if (updatedBody !== (pr.body ?? "")) {
+						await octokit.rest.pulls.update({
+							owner: organization,
+							repo: repository,
+							pull_number: prNumber,
+							body: updatedBody,
+						});
+					}
+				}
+			});
+		}
+
 		// Dispatched last, after the dashboard is synced, so the dashboard reflects
 		// this run even if a Manager workflow dispatch fails.
 		let safeUpgradesDispatched = 0;
-		if (dispatchable.length > 0) {
+		if (allowedGroups.length > 0) {
 			safeUpgradesDispatched = await step.do(
 				"dispatch-safe-upgrade-workflows",
 				async () => {
@@ -280,26 +371,12 @@ export class UppyWorkflow extends WorkflowEntrypoint<Env, Params> {
 						installationId,
 					};
 
-					// Group by (manager, groupName) so each Renovate group becomes one
-					// workflow instance / PR. Ungrouped upgrades keep their own instance.
-					const grouped = new Map<string, SafeUpgrade[]>();
-					for (const upgrade of dispatchable) {
-						const key = upgrade.groupName
-							? `${upgrade.manager}::group::${upgrade.groupName}`
-							: `${upgrade.manager}::${upgrade.package}`;
-						const group = grouped.get(key) ?? [];
-						group.push(upgrade);
-						grouped.set(key, group);
-					}
-
 					// Group by binding so each Manager workflow gets one createBatch.
 					const byBinding = new Map<keyof Env, SafeUpgrade[][]>();
-					for (const upgrades of grouped.values()) {
-						const first = upgrades[0];
-						if (!first) continue;
-						const binding = managerWorkflowBinding(first.manager);
+					for (const group of allowedGroups) {
+						const binding = managerWorkflowBinding(group.manager);
 						const list = byBinding.get(binding) ?? [];
-						list.push(upgrades);
+						list.push(group.upgrades);
 						byBinding.set(binding, list);
 					}
 
